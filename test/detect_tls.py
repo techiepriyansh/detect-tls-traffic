@@ -4,27 +4,30 @@ from bcc import BPF
 from bcc.utils import printb
 
 prog = """
-int hook_to_SSL_CTX_new(void *ctx) {
+#include <uapi/linux/ptrace.h>
+
+int hook_to_SSL_CTX_new(struct pt_regs *ctx) {
     bpf_trace_printk("New SSL Context\\n");
     return 0;
 }
 
-int hook_to_SSL_set_fd(void *ctx) {
-    bpf_trace_printk("Set Socket\\n");
+int hook_to_SSL_set_fd(struct pt_regs *ctx) {
+    int socket_fd = PT_REGS_PARM2(ctx); 
+    bpf_trace_printk("Set Socket %d\\n", socket_fd);
     return 0;
 }
 
-int hook_to_SSL_do_handshake(void *ctx) {
+int hook_to_SSL_do_handshake(struct pt_regs *ctx) {
     bpf_trace_printk("Handshake\\n");
     return 0;
 }
 
-int hook_to_SSL_read(void *ctx) {
+int hook_to_SSL_read(struct pt_regs *ctx) {
     bpf_trace_printk("Read\\n");
     return 0;
 }
 
-int hook_to_SSL_read_ex(void *ctx) {
+int hook_to_SSL_read_ex(struct pt_regs *ctx) {
     bpf_trace_printk("Read (ex)\\n");
     return 0;
 }
