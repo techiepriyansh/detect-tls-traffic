@@ -1,0 +1,47 @@
+Starting to trace...
+18965.164237000    wget             44956  New SSL Context
+18965.166245000    wget             44956  TCP Connect
+18965.237983000    wget             44956  Set Socket 3
+18965.238050000    wget             44956  Handshake
+18965.238375000    wget             44956    Sent to server
+18965.238419000    wget             44956    Recvd from server
+18965.322663000    wget             44956    Recvd from server
+18965.322692000    wget             44956    Recvd from server
+18965.323053000    wget             44956    Recvd from server
+18965.323065000    wget             44956    Recvd from server
+18965.323071000    wget             44956    Recvd from server
+18965.323075000    wget             44956    Recvd from server
+18965.323096000    wget             44956    Recvd from server
+18965.323102000    wget             44956    Recvd from server
+18965.323105000    wget             44956    Recvd from server
+18965.325753000    wget             44956    Recvd from server
+18965.325770000    wget             44956    Recvd from server
+18965.328165000    wget             44956    Recvd from server
+18965.329266000    wget             44956    Recvd from server
+18965.329283000    wget             44956    Recvd from server
+18965.329539000    wget             44956    Recvd from server
+18965.329554000    wget             44956    Recvd from server
+18965.329792000    wget             44956    Sent to server
+18965.329918000    wget             44956  Handshake Return
+18965.330013000    wget             44956  Write
+18965.330046000    wget             44956    Sent to server
+18965.330061000    wget             44956  Write Return
+18965.330123000    wget             44956    Recvd from server
+18965.330132000    wget             44956    Recvd from server
+18965.330218000    wget             44956    Recvd from server
+18965.480845000    wget             44956    Recvd from server
+18965.480872000    wget             44956    Recvd from server
+18965.480924000    wget             44956  Read
+18965.480938000    wget             44956  Read Return 511
+18965.480953000    wget             44956  Read
+18965.480959000    wget             44956  Read Return 215
+18965.481281000    wget             44956  Read
+18965.481294000    wget             44956    Recvd from server
+18965.481301000    wget             44956    Recvd from server
+18965.481305000    wget             44956    Recvd from server
+18965.483602000    wget             44956    Recvd from server
+18965.483648000    wget             44956  Read Return 1378
+18965.483724000    wget             44956  Read
+18965.483737000    wget             44956    Recvd from server
+18965.483744000    wget             44956    Recvd from server
+18965.483763000    wget             44956  Read Return 572

@@ -1,0 +1,74 @@
+Starting to trace...
+18852.365034000    curl             44865  TCP Connect
+18852.434386000    curl             44865  New SSL Context
+18852.455333000    curl             44865  Set Socket 5
+18852.455357000    curl             44865  Handshake
+18852.455719000    curl             44865    Sent to server
+18852.455781000    curl             44865    Recvd from server
+18852.455790000    curl             44865  Handshake Return
+18852.537899000    curl             44865  Handshake
+18852.537931000    curl             44865    Recvd from server
+18852.537937000    curl             44865    Recvd from server
+18852.538297000    curl             44865    Recvd from server
+18852.538307000    curl             44865    Recvd from server
+18852.538311000    curl             44865    Recvd from server
+18852.538316000    curl             44865    Recvd from server
+18852.538337000    curl             44865    Recvd from server
+18852.538342000    curl             44865    Recvd from server
+18852.538346000    curl             44865    Recvd from server
+18852.538352000    curl             44865  Handshake Return
+18852.540809000    curl             44865  Handshake
+18852.540828000    curl             44865    Recvd from server
+18852.540831000    curl             44865    Recvd from server
+18852.540835000    curl             44865  Handshake Return
+18852.543268000    curl             44865  Handshake
+18852.543289000    curl             44865    Recvd from server
+18852.544331000    curl             44865    Recvd from server
+18852.544341000    curl             44865    Recvd from server
+18852.544565000    curl             44865    Recvd from server
+18852.544575000    curl             44865    Recvd from server
+18852.544768000    curl             44865    Sent to server
+18852.544870000    curl             44865  Handshake Return
+18852.544998000    curl             44865  Write
+18852.545025000    curl             44865    Sent to server
+18852.545049000    curl             44865  Write Return
+18852.545055000    curl             44865  Write
+18852.545067000    curl             44865    Sent to server
+18852.545078000    curl             44865  Write Return
+18852.545090000    curl             44865  Write
+18852.545101000    curl             44865    Sent to server
+18852.545112000    curl             44865  Write Return
+18852.545155000    curl             44865  Write
+18852.545169000    curl             44865    Sent to server
+18852.545182000    curl             44865  Write Return
+18852.545201000    curl             44865  Read
+18852.545211000    curl             44865    Recvd from server
+18852.545216000    curl             44865    Recvd from server
+18852.545322000    curl             44865    Recvd from server
+18852.545328000    curl             44865  Read Return -1
+18852.617075000    curl             44865  Read
+18852.617106000    curl             44865    Recvd from server
+18852.617113000    curl             44865    Recvd from server
+18852.617134000    curl             44865  Read Return 28
+18852.617153000    curl             44865  Write
+18852.617170000    curl             44865    Sent to server
+18852.617230000    curl             44865  Write Return
+18852.619502000    curl             44865  Read
+18852.619520000    curl             44865    Recvd from server
+18852.619526000    curl             44865    Recvd from server
+18852.619538000    curl             44865  Read Return 9
+18852.897176000    curl             44865  Read
+18852.897209000    curl             44865    Recvd from server
+18852.897218000    curl             44865    Recvd from server
+18852.897260000    curl             44865  Read Return 1374
+18852.897752000    curl             44865  Read
+18852.897769000    curl             44865    Recvd from server
+18852.897775000    curl             44865  Read Return -1
+18852.899267000    curl             44865  Read
+18852.899284000    curl             44865    Recvd from server
+18852.899290000    curl             44865    Recvd from server
+18852.899316000    curl             44865  Read Return 988
+18852.899644000    curl             44865  Read
+18852.899666000    curl             44865    Recvd from server
+18852.899672000    curl             44865  Read Return -1
+18852.899892000    curl             44865    Sent to server
