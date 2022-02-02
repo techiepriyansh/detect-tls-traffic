@@ -1,74 +1,74 @@
 Starting to trace...
-18852.365034000    curl             44865  TCP Connect
-18852.434386000    curl             44865  New SSL Context
-18852.455333000    curl             44865  Set Socket 5
-18852.455357000    curl             44865  Handshake
-18852.455719000    curl             44865    Sent to server
-18852.455781000    curl             44865    Recvd from server
-18852.455790000    curl             44865  Handshake Return
-18852.537899000    curl             44865  Handshake
-18852.537931000    curl             44865    Recvd from server
-18852.537937000    curl             44865    Recvd from server
-18852.538297000    curl             44865    Recvd from server
-18852.538307000    curl             44865    Recvd from server
-18852.538311000    curl             44865    Recvd from server
-18852.538316000    curl             44865    Recvd from server
-18852.538337000    curl             44865    Recvd from server
-18852.538342000    curl             44865    Recvd from server
-18852.538346000    curl             44865    Recvd from server
-18852.538352000    curl             44865  Handshake Return
-18852.540809000    curl             44865  Handshake
-18852.540828000    curl             44865    Recvd from server
-18852.540831000    curl             44865    Recvd from server
-18852.540835000    curl             44865  Handshake Return
-18852.543268000    curl             44865  Handshake
-18852.543289000    curl             44865    Recvd from server
-18852.544331000    curl             44865    Recvd from server
-18852.544341000    curl             44865    Recvd from server
-18852.544565000    curl             44865    Recvd from server
-18852.544575000    curl             44865    Recvd from server
-18852.544768000    curl             44865    Sent to server
-18852.544870000    curl             44865  Handshake Return
-18852.544998000    curl             44865  Write
-18852.545025000    curl             44865    Sent to server
-18852.545049000    curl             44865  Write Return
-18852.545055000    curl             44865  Write
-18852.545067000    curl             44865    Sent to server
-18852.545078000    curl             44865  Write Return
-18852.545090000    curl             44865  Write
-18852.545101000    curl             44865    Sent to server
-18852.545112000    curl             44865  Write Return
-18852.545155000    curl             44865  Write
-18852.545169000    curl             44865    Sent to server
-18852.545182000    curl             44865  Write Return
-18852.545201000    curl             44865  Read
-18852.545211000    curl             44865    Recvd from server
-18852.545216000    curl             44865    Recvd from server
-18852.545322000    curl             44865    Recvd from server
-18852.545328000    curl             44865  Read Return -1
-18852.617075000    curl             44865  Read
-18852.617106000    curl             44865    Recvd from server
-18852.617113000    curl             44865    Recvd from server
-18852.617134000    curl             44865  Read Return 28
-18852.617153000    curl             44865  Write
-18852.617170000    curl             44865    Sent to server
-18852.617230000    curl             44865  Write Return
-18852.619502000    curl             44865  Read
-18852.619520000    curl             44865    Recvd from server
-18852.619526000    curl             44865    Recvd from server
-18852.619538000    curl             44865  Read Return 9
-18852.897176000    curl             44865  Read
-18852.897209000    curl             44865    Recvd from server
-18852.897218000    curl             44865    Recvd from server
-18852.897260000    curl             44865  Read Return 1374
-18852.897752000    curl             44865  Read
-18852.897769000    curl             44865    Recvd from server
-18852.897775000    curl             44865  Read Return -1
-18852.899267000    curl             44865  Read
-18852.899284000    curl             44865    Recvd from server
-18852.899290000    curl             44865    Recvd from server
-18852.899316000    curl             44865  Read Return 988
-18852.899644000    curl             44865  Read
-18852.899666000    curl             44865    Recvd from server
-18852.899672000    curl             44865  Read Return -1
-18852.899892000    curl             44865    Sent to server
+25211.106599000    curl             57913  TCP Connect
+25211.179015000    curl             57913  New SSL Context
+25211.191100000    curl             57913  Set Socket 5
+25211.191134000    curl             57913  Handshake
+25211.191482000    curl             57913    Sent to server
+25211.191552000    curl             57913    Recvd from server -11
+25211.191562000    curl             57913  Handshake Return
+25211.276558000    curl             57913  Handshake
+25211.276595000    curl             57913    Recvd from server 5
+25211.276601000    curl             57913    Recvd from server 122
+25211.276951000    curl             57913    Recvd from server 5
+25211.276961000    curl             57913    Recvd from server 1
+25211.276965000    curl             57913    Recvd from server 5
+25211.276968000    curl             57913    Recvd from server 36
+25211.276987000    curl             57913    Recvd from server 5
+25211.276991000    curl             57913    Recvd from server 1217
+25211.276994000    curl             57913    Recvd from server -11
+25211.276999000    curl             57913  Handshake Return
+25211.279459000    curl             57913  Handshake
+25211.279479000    curl             57913    Recvd from server 1396
+25211.279484000    curl             57913    Recvd from server -11
+25211.279488000    curl             57913  Handshake Return
+25211.281865000    curl             57913  Handshake
+25211.281881000    curl             57913    Recvd from server 471
+25211.282625000    curl             57913    Recvd from server 5
+25211.282636000    curl             57913    Recvd from server 281
+25211.282814000    curl             57913    Recvd from server 5
+25211.282827000    curl             57913    Recvd from server 69
+25211.283030000    curl             57913    Sent to server
+25211.283136000    curl             57913  Handshake Return
+25211.283267000    curl             57913  Write
+25211.283297000    curl             57913    Sent to server
+25211.283328000    curl             57913  Write Return
+25211.283338000    curl             57913  Write
+25211.283354000    curl             57913    Sent to server
+25211.283372000    curl             57913  Write Return
+25211.283384000    curl             57913  Write
+25211.283398000    curl             57913    Sent to server
+25211.283414000    curl             57913  Write Return
+25211.283463000    curl             57913  Write
+25211.283481000    curl             57913    Sent to server
+25211.283499000    curl             57913  Write Return
+25211.283524000    curl             57913  Read
+25211.283537000    curl             57913    Recvd from server 5
+25211.283544000    curl             57913    Recvd from server 210
+25211.283655000    curl             57913    Recvd from server -11
+25211.283663000    curl             57913  Read Return -1
+25211.359453000    curl             57913  Read
+25211.359490000    curl             57913    Recvd from server 5
+25211.359499000    curl             57913    Recvd from server 45
+25211.359522000    curl             57913  Read Return 28
+25211.359544000    curl             57913  Write
+25211.359564000    curl             57913    Sent to server
+25211.359626000    curl             57913  Write Return
+25211.361626000    curl             57913  Read
+25211.361650000    curl             57913    Recvd from server 5
+25211.361659000    curl             57913    Recvd from server 26
+25211.361674000    curl             57913  Read Return 9
+25211.370896000    curl             57913  Read
+25211.370930000    curl             57913    Recvd from server 5
+25211.370939000    curl             57913    Recvd from server 1391
+25211.370975000    curl             57913  Read Return 1374
+25211.371216000    curl             57913  Read
+25211.371231000    curl             57913    Recvd from server -11
+25211.371237000    curl             57913  Read Return -1
+25211.373667000    curl             57913  Read
+25211.373735000    curl             57913    Recvd from server 5
+25211.373753000    curl             57913    Recvd from server 1004
+25211.373816000    curl             57913  Read Return 987
+25211.374373000    curl             57913  Read
+25211.374394000    curl             57913    Recvd from server -11
+25211.374402000    curl             57913  Read Return -1
+25211.374607000    curl             57913    Sent to server

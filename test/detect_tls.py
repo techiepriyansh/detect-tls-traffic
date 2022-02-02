@@ -46,6 +46,16 @@ int hook_to_SSL_read_ex(struct pt_regs *ctx) {
     return 0;
 }
 
+int hook_to_SSL_peek(struct pt_regs *ctx, void * ssl, void *buf, int num) {
+    bpf_trace_printk("Peek\\n");
+    return 0;
+}
+
+int hookret_to_SSL_peek(struct pt_regs *ctx) {
+    bpf_trace_printk("Peek Return\\n");
+    return 0;
+}
+
 int hook_to_SSL_write(struct pt_regs *ctx) {
     bpf_trace_printk("Write\\n");
     return 0;
@@ -87,7 +97,7 @@ int kprobe__tcp_cleanup_rbuf(struct pt_regs *ctx, struct sock *sk, int copied)
     dport = ntohs(dport);
 
     if (dport == 443) {
-        bpf_trace_printk("  Recvd from server\\n");
+        bpf_trace_printk("  Recvd from server %d\\n", copied);
     }
 
     return 0;   
@@ -103,6 +113,7 @@ libfns = [
     "SSL_read_ex",
     "SSL_write",
     "SSL_write_ex",
+    "SSL_peek",
     "SSL_accept",
 ]
 
@@ -121,10 +132,12 @@ b.attach_uprobe(name="ssl", sym=libfns[4], fn_name="hook_to_SSL_read")
 b.attach_uprobe(name="ssl", sym=libfns[5], fn_name="hook_to_SSL_read_ex")
 b.attach_uprobe(name="ssl", sym=libfns[6], fn_name="hook_to_SSL_write")
 b.attach_uprobe(name="ssl", sym=libfns[7], fn_name="hook_to_SSL_write_ex")
+b.attach_uprobe(name="ssl", sym=libfns[8], fn_name="hook_to_SSL_peek")
 
 b.attach_uretprobe(name="ssl", sym=libfns[2], fn_name="hookret_to_SSL_do_handshake");
 b.attach_uretprobe(name="ssl", sym=libfns[4], fn_name="hookret_to_SSL_read")
 b.attach_uretprobe(name="ssl", sym=libfns[6], fn_name="hookret_to_SSL_write")
+b.attach_uretprobe(name="ssl", sym=libfns[8], fn_name="hookret_to_SSL_peek")
 
 print("Starting to trace...", flush=True)
 while 1:
