@@ -12,26 +12,19 @@
 // contains information about a TCP connection
 struct tcpaddr_t {
 	u16 family; // AF_INET or AF_INET6
-	unsigned __int128 saddr;
-	unsigned __int128 daddr;
 	u16 lport;
 	u16 dport;
+	unsigned __int128 saddr;
+	unsigned __int128 daddr;
 };
 
 // struct for storing the trace output to be sent to the userspace 
 struct perf_output_t {
 	u32 pid;
-	char name[TASK_COMM_LEN];
-	
-	// extend struct tcpaddr_t
-	u16 family;
-	unsigned __int128 saddr;
-	unsigned __int128 daddr;
-	u16 lport;
-	u16 dport; 
-
-	// flags = 1 if using not using OpenSSL for sending TLS data
+	char name[TASK_COMM_LEN];	
+	struct tcpaddr_t tcpaddr;
 	u8 flags;
+		// flags = 1 if using not using OpenSSL for sending TLS data
 };
 
 BPF_HASH(inside_ssl_io_fn, u32, u8);
@@ -79,16 +72,10 @@ int hookret_to_SSL_IO_fn(struct pt_regs *ctx) {
 
 		perf_output.pid = pid;
 		bpf_get_current_comm(&perf_output.name, sizeof(perf_output.name));
-		
-		perf_output.saddr = tcpaddr->saddr;
-		perf_output.daddr = tcpaddr->daddr;
-		perf_output.lport = tcpaddr->lport;
-		perf_output.dport = tcpaddr->dport;
-
+		perf_output.tcpaddr = *tcpaddr;
 		perf_output.flags = 0;
 
 		tls_trace_event.perf_submit(ctx, &perf_output, sizeof(perf_output));
-		bpf_trace_printk("LPORT: %d, DPORT: %d\n", perf_output.lport, perf_output.dport);
 	}
 
 	return 0;
@@ -163,16 +150,10 @@ static inline int hook_to_tcp_kernel_call_internal(struct pt_regs *ctx, struct s
 
 			perf_output.pid = pid;
 			bpf_get_current_comm(&perf_output.name, sizeof(perf_output.name));
-
-			perf_output.saddr = tcpaddr.saddr;
-			perf_output.daddr = tcpaddr.daddr;
-			perf_output.lport = tcpaddr.lport;
-			perf_output.dport = tcpaddr.dport;
-			
+			perf_output.tcpaddr = tcpaddr;
 			perf_output.flags = 1;
 
 			tls_trace_event.perf_submit(ctx, &perf_output, sizeof(perf_output));
-			bpf_trace_printk("LPORT: %d, DPORT: %d\n", perf_output.lport, perf_output.dport);
 		}
 		return 0;
 	}

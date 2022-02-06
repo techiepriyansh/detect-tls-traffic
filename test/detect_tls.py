@@ -3,7 +3,9 @@
 import sys
 
 from bcc import BPF
-from bcc.utils import printb
+from socket import inet_ntop, AF_INET, AF_INET6
+from struct import pack
+import ctypes as ct
 
 libfns = [
     "SSL_CTX_new", 
@@ -64,14 +66,42 @@ b.attach_uretprobe(name="ssl", sym=libfns[8], fn_name="hookret_to_SSL_peek")
 # b.attach_xdp(device, fn)
 
 def print_event(cpu, data, size):
+    TASK_COMM_LEN = 16 # in linux/sched.h
+
+    class tcpaddr_t(ct.Structure):
+        _fields_ = [ ("family", ct.c_uint16),
+                     ("saddr", ct.c_char * 16),
+                     ("daddr", ct.c_char * 16),
+                     ("lport", ct.c_uint16),
+                     ("dport", ct.c_uint16) ]
+
+    class perf_output_t(ct.Structure):
+        _fields_ = [ ("pid", ct.c_uint32),
+                     ("name", ct.c_char * TASK_COMM_LEN),
+                     ("tcpaddr", tcpaddr_t),
+                     ("flags", ct.c_uint8) ]
+
+    event = ct.cast(data, ct.POINTER(perf_output_t)).contents
+    print(event.pid, event.name, event.tcpaddr.family, event.tcpaddr.dport, event.tcpaddr.saddr)
+    """
     event = b["tls_trace_event"].event(data)
+    source, dest = None, None
+    if event.family == AF_INET:
+        source = inet_ntop(event.family, event.saddr, event.lport)
+        dest = inet_ntop(event.family, event.daddr, event.dport)
+    else:
+        assert event.family == AF_INET6
+        source = inet_ntop(event.family, event.saddr, event.lport)
+        dest = inet_ntop(event.family, event.daddr, event.dport)
+    """
     tls_lib = "OpenSSL" if event.flags == 0 else "Other"
-    print("%-6s %-12s %-5d %-5d %-7s" % (event.pid, event.name, event.lport, event.dport, tls_lib))
+    # print(event.lport, event.dport)
+    # print("%-6d %-12s %-5s %-5s %-7s" % (event.pid, event.name.decode('ascii'), event.lport, event.dport, tls_lib))
 
 b["tls_trace_event"].open_perf_buffer(print_event)
 
 print("Starting to trace...", flush=True)
-print("%-6s %-12s %-5s %-5s %-7s" % ("PID", "COMM", "LPORT", "DPORT", "LIB"))
+print("%-6s %-12s %-5s %-5s %-7s" % ("PID", "COMM", "SRC", "DEST", "LIB"))
 while 1:
     try:
         b.perf_buffer_poll()
