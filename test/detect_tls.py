@@ -85,26 +85,28 @@ def print_event(cpu, data, size):
                      ("flags", ct.c_uint8) ]
 
     event = ct.cast(data, ct.POINTER(perf_output_t)).contents
-    print(event.pid, event.name, event.tcpaddr.lport, event.tcpaddr.dport, event.tcpaddr.saddr)
-    """
-    event = b["tls_trace_event"].event(data)
-    source, dest = None, None
-    if event.family == AF_INET:
-        source = inet_ntop(event.family, event.saddr, event.lport)
-        dest = inet_ntop(event.family, event.daddr, event.dport)
+    
+    source_ip, dest_ip = None, None
+    if event.tcpaddr.family == AF_INET:
+        source_ip = inet_ntop(event.tcpaddr.family, bytes(event.tcpaddr.saddr[:4]))
+        dest_ip = inet_ntop(event.tcpaddr.family, bytes(event.tcpaddr.daddr[:4]))
     else:
-        assert event.family == AF_INET6
-        source = inet_ntop(event.family, event.saddr, event.lport)
-        dest = inet_ntop(event.family, event.daddr, event.dport)
-    """
+        assert event.tcpaddr.family == AF_INET6
+        source_ip = inet_ntop(event.tcpaddr.family, bytes(event.tcpaddr.saddr))
+        dest_ip = inet_ntop(event.tcpaddr.family, bytes(event.tcpaddr.daddr))
+
     tls_lib = "OpenSSL" if event.flags == 0 else "Other"
-    # print(event.lport, event.dport)
-    # print("%-6d %-12s %-5s %-5s %-7s" % (event.pid, event.name.decode('ascii'), event.lport, event.dport, tls_lib))
+
+    print("%-6d %-12s %-10s %-24s %-24s" % (event.pid, 
+                                           event.name.decode('ascii'), 
+                                           tls_lib,
+                                           "%s:%d" % (source_ip, event.tcpaddr.lport),
+                                           "%s:%d" % (dest_ip, event.tcpaddr.dport)))
 
 b["tls_trace_event"].open_perf_buffer(print_event)
 
 print("Starting to trace...", flush=True)
-print("%-6s %-12s %-5s %-5s %-7s" % ("PID", "COMM", "SRC", "DEST", "LIB"))
+print("%-6s %-12s %-10s %-24s %-24s" % ("PID", "COMM", "LIB", "SRC", "DEST"))
 while 1:
     try:
         b.perf_buffer_poll()

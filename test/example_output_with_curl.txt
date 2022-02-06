@@ -1,93 +1,19 @@
 Starting to trace...
-10493.592111000    curl             16090  TCP Connect
-10493.661544000    <idle>           0          Raw Packet
-10493.661945000    curl             16090  New SSL Context
-10493.682079000    curl             16090  Set Socket 5
-10493.682101000    curl             16090  Handshake
-10493.682375000    curl             16090    Sent to server
-10493.682421000    curl             16090    Recvd from server -11
-10493.682436000    curl             16090  Handshake Return
-10493.759724000    <idle>           0          Raw Packet
-10493.763738000    <idle>           0          Raw Packet
-10493.763954000    curl             16090  Handshake
-10493.764022000    curl             16090    Recvd from server 5
-10493.764043000    curl             16090    Recvd from server 122
-10493.765322000    curl             16090    Recvd from server 5
-10493.765366000    curl             16090    Recvd from server 1
-10493.765388000    curl             16090    Recvd from server 5
-10493.765415000    curl             16090    Recvd from server 36
-10493.765538000    curl             16090    Recvd from server 5
-10493.765577000    curl             16090    Recvd from server 1217
-10493.765592000    curl             16090    Recvd from server -11
-10493.765622000    curl             16090  Handshake Return
-10493.766555000    kworker/u16:1    15500      Raw Packet
-10493.766818000    curl             16090  Handshake
-10493.766876000    curl             16090    Recvd from server 1396
-10493.766888000    curl             16090    Recvd from server -11
-10493.766898000    curl             16090  Handshake Return
-10493.768958000    <idle>           0          Raw Packet
-10493.769041000    curl             16090  Handshake
-10493.769058000    curl             16090    Recvd from server 471
-10493.770515000    curl             16090    Recvd from server 5
-10493.770539000    curl             16090    Recvd from server 281
-10493.770764000    curl             16090    Recvd from server 5
-10493.770774000    curl             16090    Recvd from server 69
-10493.771032000    curl             16090    Sent to server
-10493.771170000    curl             16090  Handshake Return
-10493.771343000    curl             16090  Write
-10493.771390000    curl             16090    Sent to server
-10493.771425000    curl             16090  Write Return
-10493.771436000    curl             16090  Write
-10493.771458000    curl             16090    Sent to server
-10493.771484000    curl             16090  Write Return
-10493.771495000    curl             16090  Write
-10493.771514000    curl             16090    Sent to server
-10493.771537000    curl             16090  Write Return
-10493.771596000    curl             16090  Write
-10493.771620000    curl             16090    Sent to server
-10493.771644000    curl             16090  Write Return
-10493.771666000    curl             16090  Read
-10493.771683000    curl             16090    Recvd from server 5
-10493.771692000    curl             16090    Recvd from server 210
-10493.771840000    curl             16090    Recvd from server -11
-10493.771850000    curl             16090  Read Return -1
-10493.854327000    <idle>           0          Raw Packet
-10493.854389000    <idle>           0          Raw Packet
-10493.854398000    <idle>           0          Raw Packet
-10493.854440000    <idle>           0          Raw Packet
-10493.854454000    <idle>           0          Raw Packet
-10493.854500000    <idle>           0          Raw Packet
-10493.854513000    <idle>           0          Raw Packet
-10493.854527000    curl             16090  Read
-10493.854580000    curl             16090    Recvd from server 5
-10493.854604000    curl             16090    Recvd from server 45
-10493.854645000    curl             16090  Read Return 28
-10493.854679000    curl             16090  Write
-10493.854719000    curl             16090    Sent to server
-10493.854806000    curl             16090  Write Return
-10493.854837000    curl             16090  Read
-10493.854863000    curl             16090    Recvd from server 5
-10493.854877000    curl             16090    Recvd from server 26
-10493.854902000    curl             16090  Read Return 9
-10493.855982000    detect_tls.py    16089      Raw Packet
-10493.856065000    curl             16090  Read
-10493.856087000    curl             16090    Recvd from server 5
-10493.856096000    curl             16090    Recvd from server 1391
-10493.856129000    curl             16090  Read Return 1374
-10493.856467000    curl             16090  Read
-10493.856481000    curl             16090    Recvd from server -11
-10493.856487000    curl             16090  Read Return -1
-10493.858228000    <idle>           0          Raw Packet
-10493.858300000    curl             16090  Read
-10493.858323000    curl             16090    Recvd from server 5
-10493.858333000    curl             16090    Recvd from server 1006
-10493.858363000    curl             16090  Read Return 989
-10493.858453000    curl             16090  Read
-10493.858468000    curl             16090    Recvd from server -11
-10493.858477000    curl             16090  Read Return -1
-10493.858711000    curl             16090    Sent to server
-10493.925670000    <idle>           0          Raw Packet
-10493.932621000    <idle>           0          Raw Packet
-10493.933159000    <idle>           0          Raw Packet
-10493.933261000    <idle>           0          Raw Packet
-10493.934506000    <idle>           0          Raw Packet
+PID    COMM         LIB        SRC                      DEST                    
+31663  curl         OpenSSL    192.168.1.210:58322      185.199.111.153:443     
+31663  curl         OpenSSL    192.168.1.210:58322      185.199.111.153:443     
+31663  curl         OpenSSL    192.168.1.210:58322      185.199.111.153:443     
+31663  curl         OpenSSL    192.168.1.210:58322      185.199.111.153:443     
+31663  curl         OpenSSL    192.168.1.210:58322      185.199.111.153:443     
+31663  curl         OpenSSL    192.168.1.210:58322      185.199.111.153:443     
+31663  curl         OpenSSL    192.168.1.210:58322      185.199.111.153:443     
+31663  curl         OpenSSL    192.168.1.210:58322      185.199.111.153:443     
+31663  curl         OpenSSL    192.168.1.210:58322      185.199.111.153:443     
+31663  curl         OpenSSL    192.168.1.210:58322      185.199.111.153:443     
+31663  curl         OpenSSL    192.168.1.210:58322      185.199.111.153:443     
+31663  curl         OpenSSL    192.168.1.210:58322      185.199.111.153:443     
+31663  curl         OpenSSL    192.168.1.210:58322      185.199.111.153:443     
+31663  curl         OpenSSL    192.168.1.210:58322      185.199.111.153:443     
+31663  curl         OpenSSL    192.168.1.210:58322      185.199.111.153:443     
+31663  curl         OpenSSL    192.168.1.210:58322      185.199.111.153:443     
+31663  curl         OpenSSL    192.168.1.210:58322      185.199.111.153:443     

@@ -1,63 +1,7 @@
 Starting to trace...
-10515.998004000    wget             16121  New SSL Context
-10516.000738000    wget             16121  TCP Connect
-10516.075144000    <idle>           0          Raw Packet
-10516.075622000    wget             16121  Set Socket 3
-10516.075794000    wget             16121  Handshake
-10516.076937000    wget             16121    Sent to server
-10516.077070000    wget             16121    Recvd from server 0
-10516.159564000    <idle>           0          Raw Packet
-10516.163523000    <idle>           0          Raw Packet
-10516.163684000    wget             16121    Recvd from server 5
-10516.163727000    wget             16121    Recvd from server 122
-10516.164803000    wget             16121    Recvd from server 5
-10516.164854000    wget             16121    Recvd from server 1
-10516.164869000    wget             16121    Recvd from server 5
-10516.164883000    wget             16121    Recvd from server 27
-10516.164942000    wget             16121    Recvd from server 5
-10516.164959000    wget             16121    Recvd from server 1226
-10516.164968000    wget             16121    Recvd from server 0
-10516.166927000    <idle>           0          Raw Packet
-10516.167053000    wget             16121    Recvd from server 1396
-10516.167083000    wget             16121    Recvd from server 0
-10516.169125000    <idle>           0          Raw Packet
-10516.169214000    wget             16121    Recvd from server 462
-10516.170517000    wget             16121    Recvd from server 5
-10516.170536000    wget             16121    Recvd from server 281
-10516.170753000    wget             16121    Recvd from server 5
-10516.170765000    wget             16121    Recvd from server 69
-10516.171072000    wget             16121    Sent to server
-10516.171234000    wget             16121  Handshake Return
-10516.171339000    wget             16121  Write
-10516.171372000    wget             16121    Sent to server
-10516.171390000    wget             16121  Write Return
-10516.171477000    wget             16121  Peek
-10516.171498000    wget             16121    Recvd from server 5
-10516.171510000    wget             16121    Recvd from server 210
-10516.171612000    wget             16121    Recvd from server 0
-10516.246660000    <idle>           0          Raw Packet
-10516.323783000    <idle>           0          Raw Packet
-10516.327298000    <idle>           0          Raw Packet
-10516.327545000    wget             16121    Recvd from server 5
-10516.327604000    wget             16121    Recvd from server 744
-10516.327689000    wget             16121  Peek Return
-10516.327743000    wget             16121  Read
-10516.327781000    wget             16121  Read Return 511
-10516.327823000    wget             16121  Peek
-10516.327848000    wget             16121  Peek Return
-10516.327894000    wget             16121  Read
-10516.327922000    wget             16121  Read Return 216
-10516.329023000    wget             16121  Read
-10516.329085000    wget             16121    Recvd from server 5
-10516.329117000    wget             16121    Recvd from server 642
-10516.329137000    wget             16121    Recvd from server 0
-10516.330413000    nvim             11281      Raw Packet
-10516.330499000    wget             16121    Recvd from server 753
-10516.330610000    wget             16121  Read Return 1378
-10516.330757000    wget             16121  Read
-10516.330782000    wget             16121    Recvd from server 5
-10516.330793000    wget             16121    Recvd from server 589
-10516.330853000    wget             16121  Read Return 572
-10516.406941000    <idle>           0          Raw Packet
-10516.407368000    <idle>           0          Raw Packet
-10516.407542000    <idle>           0          Raw Packet
+PID    COMM         LIB        SRC                      DEST                    
+31836  wget         OpenSSL    192.168.1.210:58324      185.199.111.153:443     
+31836  wget         OpenSSL    192.168.1.210:58324      185.199.111.153:443     
+31836  wget         OpenSSL    192.168.1.210:58324      185.199.111.153:443     
+31836  wget         OpenSSL    192.168.1.210:58324      185.199.111.153:443     
+31836  wget         OpenSSL    192.168.1.210:58324      185.199.111.153:443     

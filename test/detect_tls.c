@@ -33,7 +33,7 @@ BPF_HASH(pid_tcpaddr_map, u32, struct tcpaddr_t);
 
 BPF_PERF_OUTPUT(tls_trace_event);
 
-// hook to SSL_read[_ex], SSL_write[_ex], SSL_do_handshake, SSL_peek[_ex]
+// hook to SSL_read[_ex], SSL_write[_ex], SSL_do_handshake, SSL_peek[_ex], SSL_shutdown
 int hook_to_SSL_IO_fn(struct pt_regs *ctx) {
 	u32 pid;
 	pid = bpf_get_current_pid_tgid();
@@ -54,7 +54,7 @@ int hook_to_SSL_IO_fn(struct pt_regs *ctx) {
 	return 0;
 }
 
-// hook to SSL_read[_ex], SSL_write[_ex], SSL_do_handshake, SSL_peek[_ex] return
+// hook to SSL_read[_ex], SSL_write[_ex], SSL_do_handshake, SSL_peek[_ex], SSL_shutdown return
 int hookret_to_SSL_IO_fn(struct pt_regs *ctx) {
 	u32 pid;
 	pid = bpf_get_current_pid_tgid();
