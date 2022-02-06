@@ -12,10 +12,11 @@
 // contains information about a TCP connection
 struct tcpaddr_t {
 	u16 family; // AF_INET or AF_INET6
+	u8 saddr[16];
+	u8 daddr[16];
 	u16 lport;
 	u16 dport;
-	unsigned __int128 saddr;
-	unsigned __int128 daddr;
+
 };
 
 // struct for storing the trace output to be sent to the userspace 
@@ -107,8 +108,8 @@ static inline int parse_tcpaddr(struct sock *sk, struct tcpaddr_t *tcpaddr)
 	tcpaddr->family = family;
 
 	if (family == AF_INET) {
-		tcpaddr->saddr = sk->__sk_common.skc_rcv_saddr;
-		tcpaddr->daddr = sk->__sk_common.skc_daddr;
+		bpf_probe_read_kernel(&tcpaddr->saddr, 4, &sk->__sk_common.skc_rcv_saddr);
+		bpf_probe_read_kernel(&tcpaddr->daddr, 4, &sk->__sk_common.skc_daddr);
 		tcpaddr->lport = sk->__sk_common.skc_num;
 		
 		dport = sk->__sk_common.skc_dport;

@@ -18,6 +18,7 @@ libfns = [
     "SSL_write_ex",
     "SSL_peek",
     "SSL_peek_ex",
+    "SSL_shutdown",
     "SSL_accept",
 ]
 
@@ -37,6 +38,7 @@ b.attach_uprobe(name="ssl", sym=libfns[6], fn_name="hook_to_SSL_IO_fn")
 b.attach_uprobe(name="ssl", sym=libfns[7], fn_name="hook_to_SSL_IO_fn")
 b.attach_uprobe(name="ssl", sym=libfns[8], fn_name="hook_to_SSL_IO_fn")
 b.attach_uprobe(name="ssl", sym=libfns[9], fn_name="hook_to_SSL_IO_fn")
+b.attach_uprobe(name="ssl", sym=libfns[10], fn_name="hook_to_SSL_IO_fn")
 
 b.attach_uretprobe(name="ssl", sym=libfns[2], fn_name="hookret_to_SSL_IO_fn")
 b.attach_uretprobe(name="ssl", sym=libfns[4], fn_name="hookret_to_SSL_IO_fn")
@@ -45,6 +47,7 @@ b.attach_uretprobe(name="ssl", sym=libfns[6], fn_name="hookret_to_SSL_IO_fn")
 b.attach_uretprobe(name="ssl", sym=libfns[7], fn_name="hookret_to_SSL_IO_fn")
 b.attach_uretprobe(name="ssl", sym=libfns[8], fn_name="hookret_to_SSL_IO_fn")
 b.attach_uretprobe(name="ssl", sym=libfns[9], fn_name="hookret_to_SSL_IO_fn")
+b.attach_uretprobe(name="ssl", sym=libfns[10], fn_name="hookret_to_SSL_IO_fn")
 
 """
 b.attach_uprobe(name="ssl", sym=libfns[0], fn_name="hook_to_SSL_CTX_new")
@@ -70,8 +73,8 @@ def print_event(cpu, data, size):
 
     class tcpaddr_t(ct.Structure):
         _fields_ = [ ("family", ct.c_uint16),
-                     ("saddr", ct.c_char * 16),
-                     ("daddr", ct.c_char * 16),
+                     ("saddr", ct.c_uint8 * 16),
+                     ("daddr", ct.c_uint8 * 16),
                      ("lport", ct.c_uint16),
                      ("dport", ct.c_uint16) ]
 
@@ -82,7 +85,7 @@ def print_event(cpu, data, size):
                      ("flags", ct.c_uint8) ]
 
     event = ct.cast(data, ct.POINTER(perf_output_t)).contents
-    print(event.pid, event.name, event.tcpaddr.family, event.tcpaddr.dport, event.tcpaddr.saddr)
+    print(event.pid, event.name, event.tcpaddr.lport, event.tcpaddr.dport, event.tcpaddr.saddr)
     """
     event = b["tls_trace_event"].event(data)
     source, dest = None, None
