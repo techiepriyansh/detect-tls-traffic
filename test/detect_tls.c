@@ -9,6 +9,141 @@
 #include <net/sock.h>
 #include <bcc/proto.h>
 
+// contains information about a TCP connection
+struct tcpaddr_t {
+	u16 family; // AF_INET or AF_INET6
+	unsigned __int128 saddr;
+	unsigned __int128 daddr;
+	u16 lport;
+	u16 dport;
+}
+
+// struct for storing the trace output to be sent to the userspace 
+struct perf_output_t {
+	u32 pid;
+	char name[TASK_COMM_LEN];
+	struct tcpaddr_t tcpaddr;
+}
+
+BPF_HASH(inside_ssl_io_fn, u32, u8);
+BPF_HASH(pid_tcpaddr_map, u32, struct tcpaddr_t);
+
+BPF_PERF_OUTPUT(tls_trace_event);
+
+// hook to SSL_read[_ex], SSL_write[_ex], SSL_do_handshake, SSL_peek[_ex]
+int hook_to_SSL_IO_fn(struct pt_regs *ctx) {
+	u32 pid;
+	pid = bpf_get_current_pid_tgid();
+
+	// due to a bug in the map.update function for kernel versions before 4.8
+	u8 *val = inside_ssl_io_fn.lookup(&pid);
+	if (val != NULL) 
+		inside_ssl_io_fn.delete(val);
+
+	u8 _true = 1;
+	inside_ssl_io_fn.update(&pid, &_true);
+	
+	// reset the tcpaddr value
+	pid_tcpaddr_map.delete(&pid);
+
+	return 0;
+}
+
+// hook to SSL_read[_ex], SSL_write[_ex], SSL_do_handshake, SSL_peek[_ex] return
+int hookret_to_SSL_IO_fn(struct pt_regs *ctx) {
+	u32 pid;
+	pid = bpf_get_current_pid_tgid();
+
+	u8 *val = inside_ssl_io_fn.lookup(&pid);
+	if (val == NULL)
+		return 1;
+
+	u8 _false = 0;
+	inside_ssl_io_fn.delete(&pid); // has to be done due to a bug in map.update
+	inside_ssl_io_fn.update(&pid, &_false);
+
+	struct tcpaddr_t *tcpaddr = pid_tcpaddr_map.lookup(&pid);
+	if (tcpaddr != NULL) {
+		struct perf_output_t perf_output = {}
+
+		perf_output.pid = pid;
+		bpf_get_current_comm(&perf_output.name, sizeof(perf_output.name));
+		perf_output.tcpaddr = *tcpaddr;
+
+		tls_trace_event.submit(ctx, perf_output, sizeof(perf_output));
+	}
+
+	return 0;
+}
+
+int static inline is_tls(struct sock *sk, struct msghdr *msg, size_t size) {
+    u16 dport = 0, lport = 0, family = sk->__sk_common.skc_family;
+
+	if (family == AF_INET || family == AF_INET6) {
+		lport = sk->__sk_common.skc_num;
+
+		dport = sk->__sk_common.skc_dport
+		dport = ntohs(dport);
+		
+		if (dport == 443 || lport == 443)
+			return 1;
+	}
+
+	return 0;
+}
+
+int kprobe__tcp_sendmsg(struct pt_regs *ctx, struct sock *sk,
+    struct msghdr *msg, size_t size)
+{
+	if (!is_tls(sk, msg, size))
+		return 0;
+
+	u32 pid;
+	pid = bpf_get_current_pid_tgid();
+	
+	u8 is_inside_ssl_io_fn  = inside_ssl_io_fn.lookup(&pid);
+	if (!is_inside_ssl_io_fn) {
+		// not using the OpenSSL library for TLS
+		// send this information to userspace
+		return 0;
+	}
+
+	struct tcpaddr_t *val = pid_tcpaddr_map.lookup(&pid);
+	if (val != NULL)
+		return 0; // already accounted for the current ssl fn's tcpaddr
+
+	// if this tcp kernel call is the first one inside the current ssl fn's invocation,
+	// store the tcpaddr information
+	u16 dport = 0, family = sk->__sk_common.skc_family;
+
+	struct tcpaddr_t tcpaddr = {};
+	tcpaddr.family = family;
+
+	if (family == AF_INET) {
+		tcpaddr.saddr = sk->__sk_common.skc_rcv_saddr;
+		tcpaddr.daddr = sk->__sk_common.skc_daddr;
+		tcpaddr.lport = sk->__sk_common.skc_num;
+		
+		dport = sk->__sk_common.skc_dport;
+		tcpaddr.dport = ntohs(dport);
+	} else if (AF_FAMILY == AF_INET6) {
+		bpf_probe_read_kernel(&tcpaddr.saddr, sizeof(tcpaddr.saddr),
+			&sk->__sk_common.skc_v6_rcv_saddr.in6_u.u6_addr32);
+		bpf_probe_read_kernel(&tcpaddr.daddr, sizeof(tcpaddr.daddr),
+			&sk->__sk_common.skc_v6_daddr.in6_u.u6_addr32);
+		tcpaddr.lport = sk->__sk_common.skc_num;
+
+		dport = sk->__sk_common.skc_dport;
+		tcpaddr.dport = ntohs(dport);
+	}
+	
+	pid_tcpaddr_map.update(&pid, &tcpaddr);
+	
+    return 0;
+}
+
+
+/*
 // Hooks to OpenSSL library functions
 int hook_to_SSL_CTX_new(struct pt_regs *ctx) {
     bpf_trace_printk("New SSL Context\n");
@@ -76,20 +211,9 @@ int kretprobe__tcp_v4_connect(struct pt_regs *ctx) {
     bpf_trace_printk("TCP Connect\n");
     return 0;
 }
+*/
 
-int kprobe__tcp_sendmsg(struct pt_regs *ctx, struct sock *sk,
-    struct msghdr *msg, size_t size)
-{
-    u16 lport = sk->__sk_common.skc_num;
-    u16 dport = sk->__sk_common.skc_dport;
-    dport = ntohs(dport);
 
-    if (dport == 443) {
-        bpf_trace_printk("  Sent to server\n");
-    }
-
-    return 0;
-}
 
 int kprobe__tcp_cleanup_rbuf(struct pt_regs *ctx, struct sock *sk, int copied)
 {
