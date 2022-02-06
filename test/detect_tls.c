@@ -16,14 +16,23 @@ struct tcpaddr_t {
 	unsigned __int128 daddr;
 	u16 lport;
 	u16 dport;
-}
+};
 
 // struct for storing the trace output to be sent to the userspace 
 struct perf_output_t {
 	u32 pid;
 	char name[TASK_COMM_LEN];
-	struct tcpaddr_t tcpaddr;
-}
+	
+	// extend struct tcpaddr_t
+	u16 family;
+	unsigned __int128 saddr;
+	unsigned __int128 daddr;
+	u16 lport;
+	u16 dport; 
+
+	// flags = 1 if using not using OpenSSL for sending TLS data
+	u8 flags;
+};
 
 BPF_HASH(inside_ssl_io_fn, u32, u8);
 BPF_HASH(pid_tcpaddr_map, u32, struct tcpaddr_t);
@@ -38,13 +47,15 @@ int hook_to_SSL_IO_fn(struct pt_regs *ctx) {
 	// due to a bug in the map.update function for kernel versions before 4.8
 	u8 *val = inside_ssl_io_fn.lookup(&pid);
 	if (val != NULL) 
-		inside_ssl_io_fn.delete(val);
+		inside_ssl_io_fn.delete(&pid);
 
 	u8 _true = 1;
 	inside_ssl_io_fn.update(&pid, &_true);
 	
 	// reset the tcpaddr value
-	pid_tcpaddr_map.delete(&pid);
+	struct tcpaddr_t *tcpaddr = pid_tcpaddr_map.lookup(&pid); 
+	if (tcpaddr != NULL)
+		pid_tcpaddr_map.delete(&pid);
 
 	return 0;
 }
@@ -64,25 +75,35 @@ int hookret_to_SSL_IO_fn(struct pt_regs *ctx) {
 
 	struct tcpaddr_t *tcpaddr = pid_tcpaddr_map.lookup(&pid);
 	if (tcpaddr != NULL) {
-		struct perf_output_t perf_output = {}
+		struct perf_output_t perf_output = {};
 
 		perf_output.pid = pid;
 		bpf_get_current_comm(&perf_output.name, sizeof(perf_output.name));
-		perf_output.tcpaddr = *tcpaddr;
+		
+		perf_output.saddr = tcpaddr->saddr;
+		perf_output.daddr = tcpaddr->daddr;
+		perf_output.lport = tcpaddr->lport;
+		perf_output.dport = tcpaddr->dport;
 
-		tls_trace_event.submit(ctx, perf_output, sizeof(perf_output));
+		perf_output.flags = 0;
+
+		tls_trace_event.perf_submit(ctx, &perf_output, sizeof(perf_output));
+		bpf_trace_printk("LPORT: %d, DPORT: %d\n", perf_output.lport, perf_output.dport);
 	}
 
 	return 0;
 }
 
-int static inline is_tls(struct sock *sk, struct msghdr *msg, size_t size) {
+// helper function to determine if the packet is (should be) a TLS packet or not
+// currently just checks if any of the dport or lport is 443
+int static inline is_tls(struct sock *sk) 
+{
     u16 dport = 0, lport = 0, family = sk->__sk_common.skc_family;
 
 	if (family == AF_INET || family == AF_INET6) {
 		lport = sk->__sk_common.skc_num;
 
-		dport = sk->__sk_common.skc_dport
+		dport = sk->__sk_common.skc_dport;
 		dport = ntohs(dport);
 		
 		if (dport == 443 || lport == 443)
@@ -92,19 +113,67 @@ int static inline is_tls(struct sock *sk, struct msghdr *msg, size_t size) {
 	return 0;
 }
 
-int kprobe__tcp_sendmsg(struct pt_regs *ctx, struct sock *sk,
-    struct msghdr *msg, size_t size)
+static inline int parse_tcpaddr(struct sock *sk, struct tcpaddr_t *tcpaddr)
 {
-	if (!is_tls(sk, msg, size))
+	u16 dport = 0, family = sk->__sk_common.skc_family;
+	
+	tcpaddr->family = family;
+
+	if (family == AF_INET) {
+		tcpaddr->saddr = sk->__sk_common.skc_rcv_saddr;
+		tcpaddr->daddr = sk->__sk_common.skc_daddr;
+		tcpaddr->lport = sk->__sk_common.skc_num;
+		
+		dport = sk->__sk_common.skc_dport;
+		tcpaddr->dport = ntohs(dport);
+		
+		return 1; // parsed successfully 
+	} else if (family == AF_INET6) {
+		bpf_probe_read_kernel(&tcpaddr->saddr, sizeof(tcpaddr->saddr),
+			&sk->__sk_common.skc_v6_rcv_saddr.in6_u.u6_addr32);
+		bpf_probe_read_kernel(&tcpaddr->daddr, sizeof(tcpaddr->daddr),
+			&sk->__sk_common.skc_v6_daddr.in6_u.u6_addr32);
+		tcpaddr->lport = sk->__sk_common.skc_num;
+
+		dport = sk->__sk_common.skc_dport;
+		tcpaddr->dport = ntohs(dport);
+
+		return 1; // parsed successfully 
+	}
+
+	return 0; // could not parse successfully
+}
+
+// internal function for kprobing tcp kernel calls: tcp_sendmsg and tcp_clean_rbuf
+static inline int hook_to_tcp_kernel_call_internal(struct pt_regs *ctx, struct sock *sk)
+{
+	if (!is_tls(sk))
 		return 0;
 
 	u32 pid;
 	pid = bpf_get_current_pid_tgid();
 	
-	u8 is_inside_ssl_io_fn  = inside_ssl_io_fn.lookup(&pid);
-	if (!is_inside_ssl_io_fn) {
+	u8 *is_inside_ssl_io_fn  = inside_ssl_io_fn.lookup(&pid);
+	if (is_inside_ssl_io_fn == NULL || !(*is_inside_ssl_io_fn)) {
 		// not using the OpenSSL library for TLS
 		// send this information to userspace
+		struct tcpaddr_t tcpaddr = {};
+		if (parse_tcpaddr(sk, &tcpaddr)) {
+			struct perf_output_t perf_output = {};
+
+			perf_output.pid = pid;
+			bpf_get_current_comm(&perf_output.name, sizeof(perf_output.name));
+
+			perf_output.saddr = tcpaddr.saddr;
+			perf_output.daddr = tcpaddr.daddr;
+			perf_output.lport = tcpaddr.lport;
+			perf_output.dport = tcpaddr.dport;
+			
+			perf_output.flags = 1;
+
+			tls_trace_event.perf_submit(ctx, &perf_output, sizeof(perf_output));
+			bpf_trace_printk("LPORT: %d, DPORT: %d\n", perf_output.lport, perf_output.dport);
+		}
 		return 0;
 	}
 
@@ -114,34 +183,93 @@ int kprobe__tcp_sendmsg(struct pt_regs *ctx, struct sock *sk,
 
 	// if this tcp kernel call is the first one inside the current ssl fn's invocation,
 	// store the tcpaddr information
-	u16 dport = 0, family = sk->__sk_common.skc_family;
-
 	struct tcpaddr_t tcpaddr = {};
-	tcpaddr.family = family;
-
-	if (family == AF_INET) {
-		tcpaddr.saddr = sk->__sk_common.skc_rcv_saddr;
-		tcpaddr.daddr = sk->__sk_common.skc_daddr;
-		tcpaddr.lport = sk->__sk_common.skc_num;
-		
-		dport = sk->__sk_common.skc_dport;
-		tcpaddr.dport = ntohs(dport);
-	} else if (AF_FAMILY == AF_INET6) {
-		bpf_probe_read_kernel(&tcpaddr.saddr, sizeof(tcpaddr.saddr),
-			&sk->__sk_common.skc_v6_rcv_saddr.in6_u.u6_addr32);
-		bpf_probe_read_kernel(&tcpaddr.daddr, sizeof(tcpaddr.daddr),
-			&sk->__sk_common.skc_v6_daddr.in6_u.u6_addr32);
-		tcpaddr.lport = sk->__sk_common.skc_num;
-
-		dport = sk->__sk_common.skc_dport;
-		tcpaddr.dport = ntohs(dport);
+	if (parse_tcpaddr(sk, &tcpaddr)) {
+		pid_tcpaddr_map.update(&pid, &tcpaddr);
 	}
-	
-	pid_tcpaddr_map.update(&pid, &tcpaddr);
-	
+
     return 0;
 }
 
+int kprobe__tcp_sendmsg(struct pt_regs *ctx, struct sock *sk,
+    struct msghdr *msg, size_t size)
+{
+	return hook_to_tcp_kernel_call_internal(ctx, sk);
+}
+
+int kprobe__tcp_cleanup_rbuf(struct pt_regs *ctx, struct sock *sk, int copied)
+{
+	return hook_to_tcp_kernel_call_internal(ctx, sk);   
+}
+
+//XDP filter helper functions
+static inline void handle_tcp(void *data, void *data_end) 
+{
+	struct tcphdr *tcph = data;
+	if ((void*)&tcph[1] <= data_end) {
+		if (tcph->source == htons(443)) {
+			bpf_trace_printk("    Raw Packet\n");	
+		}
+	}
+}
+
+static inline void handle_ipv4(void *data, void *data_end) 
+{
+    struct iphdr *iph = data;
+    if ((void*)&iph[1] <= data_end) {
+		if (iph->protocol == IPPROTO_TCP) {
+			handle_tcp((void*)&iph[1], data_end);
+		}
+	}
+}
+
+static inline void handle_ipv6(void *data, void *data_end) 
+{
+    struct ipv6hdr *ip6h = data;
+    if ((void*)&ip6h[1] <= data_end) {
+		if (ip6h->nexthdr == IPPROTO_TCP) {
+			handle_tcp((void*)&ip6h[1], data_end);
+		}
+	}
+}
+
+// XDP filter functions
+int ingress_tls_filter(struct xdp_md *ctx)
+{
+    void* data_end = (void*)(long)ctx->data_end;
+    void* data = (void*)(long)ctx->data;
+
+    struct ethhdr *eth = data;
+
+    u64 nh_off = 0;
+    nh_off = sizeof(*eth);
+
+    if (data + nh_off  <= data_end) {
+		u16 h_proto;
+		h_proto = eth->h_proto;
+		
+		// parse vlan header
+		#pragma unroll
+		for (int i=0; i<2; i++) {
+			if (h_proto == htons(ETH_P_8021Q) || h_proto == htons(ETH_P_8021AD)) {
+				struct vlan_hdr *vhdr;
+				vhdr = data + nh_off;
+				nh_off += sizeof(struct vlan_hdr);
+				if (data + nh_off <= data_end) {
+					h_proto = vhdr->h_vlan_encapsulated_proto;
+				}
+			}
+		}
+
+		if (h_proto == htons(ETH_P_IP)) {
+			handle_ipv4(data + nh_off, data_end);
+		} else if (h_proto == ETH_P_IPV6) {
+			handle_ipv6(data + nh_off, data_end);
+		}
+	}
+	
+	return XDP_PASS;
+}
 
 /*
 // Hooks to OpenSSL library functions
@@ -215,81 +343,5 @@ int kretprobe__tcp_v4_connect(struct pt_regs *ctx) {
 
 
 
-int kprobe__tcp_cleanup_rbuf(struct pt_regs *ctx, struct sock *sk, int copied)
-{
-    u16 lport = sk->__sk_common.skc_num;
-    u16 dport = sk->__sk_common.skc_dport;
-    dport = ntohs(dport);
 
-    if (dport == 443) {
-        bpf_trace_printk("  Recvd from server %d\n", copied);
-    }
 
-    return 0;   
-}
-
-//XDP filter helper functions
-static inline void parse_tcp(void *data, void *data_end) {
-	struct tcphdr *tcph = data;
-	if ((void*)&tcph[1] <= data_end) {
-		if (tcph->source == htons(443)) {
-			bpf_trace_printk("    Raw Packet\n");	
-		}
-	}
-}
-
-static inline void parse_ipv4(void *data, void *data_end) {
-    struct iphdr *iph = data;
-    if ((void*)&iph[1] <= data_end) {
-		if (iph->protocol == IPPROTO_TCP) {
-			parse_tcp((void*)&iph[1], data_end);
-		}
-	}
-}
-
-static inline void parse_ipv6(void *data, void *data_end) {
-    struct ipv6hdr *ip6h = data;
-    if ((void*)&ip6h[1] <= data_end) {
-		if (ip6h->nexthdr == IPPROTO_TCP) {
-			parse_tcp((void*)&ip6h[1], data_end);
-		}
-	}
-}
-
-// XDP filter functions
-int ingress_tls_filter(struct xdp_md *ctx)
-{
-    void* data_end = (void*)(long)ctx->data_end;
-    void* data = (void*)(long)ctx->data;
-
-    struct ethhdr *eth = data;
-
-    u64 nh_off = 0;
-    nh_off = sizeof(*eth);
-
-    if (data + nh_off  <= data_end) {
-		u16 h_proto;
-		h_proto = eth->h_proto;
-		
-		// parse vlan header
-		#pragma unroll
-		for (int i=0; i<2; i++) {
-			if (h_proto == htons(ETH_P_8021Q) || h_proto == htons(ETH_P_8021AD)) {
-				struct vlan_hdr *vhdr;
-				vhdr = data + nh_off;
-				nh_off += sizeof(struct vlan_hdr);
-				if (data + nh_off <= data_end) {
-					h_proto = vhdr->h_vlan_encapsulated_proto;
-				}
-			}
-		}
-
-		if (h_proto == htons(ETH_P_IP)) {
-			parse_ipv4(data + nh_off, data_end);
-		} else if (h_proto == ETH_P_IPV6) {
-			parse_ipv6(data + nh_off, data_end);
-		}
-	}
-	
-	return XDP_PASS;
-}
