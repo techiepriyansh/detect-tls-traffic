@@ -18,14 +18,40 @@ with open(base_path + "/detect_tls.c", "rt") as f:
 with open(base_path + "/config.json") as f:
     tls_libs = json.load(f)
 
-# compile bpf program and attach probes
+# create external wrapper functions and place them in the bpf c source code
+wrapper_enter_fn_template = """
+int hook_to_tls_lib_%s_fn(struct pt_regs *ctx)
+{
+    return tls_lib_fn_enter(ctx, %d);
+}
+"""
+
+wrapper_exit_fn_template = """
+int hookret_to_tls_lib_%s_fn(struct pt_regs *ctx)
+{
+    return tls_lib_fn_exit(ctx);
+}
+"""
+
+wrapper_fns = []
+for i, lib in enumerate(tls_libs):
+    wrapper_fns.append(wrapper_enter_fn_template % (lib["name"], i))
+    wrapper_fns.append(wrapper_exit_fn_template % lib["name"])
+
+bpf_prog_text = bpf_prog_text.replace("__PY_EXTERNAL_WRAPPERS__", '\n'.join(wrapper_fns))
+
+# substitute blacklisting options inside the bpf c source code
+bpf_prog_text = bpf_prog_text.replace("__PY_SHOULD_BLACKLIST__", "1");
+
+# compile bpf program
 b = BPF(text=bpf_prog_text)
 
+# attach uprobes and uretprobes
 for lib in tls_libs:
     libname = lib["name"]
     for libfn in lib["functions"]:
-        b.attach_uprobe(name=libname, sym=libfn, fn_name="hook_to_SSL_IO_fn")
-        b.attach_uretprobe(name=libname, sym=libfn, fn_name="hookret_to_SSL_IO_fn")
+        b.attach_uprobe(name=libname, sym=libfn, fn_name="hook_to_tls_lib_%s_fn"%libname)
+        b.attach_uretprobe(name=libname, sym=libfn, fn_name="hookret_to_tls_lib_%s_fn"%libname)
 
 # attach XDP Filter if opted
 device = None
@@ -49,6 +75,7 @@ def print_event(cpu, data, size):
         _fields_ = [ ("pid", ct.c_uint32),
                      ("name", ct.c_char * TASK_COMM_LEN),
                      ("tcpaddr", tcpaddr_t),
+                     ("lib_id", ct.c_uint8),
                      ("flags", ct.c_uint8) ]
 
     event = ct.cast(data, ct.POINTER(perf_output_t)).contents
@@ -62,13 +89,19 @@ def print_event(cpu, data, size):
         local_ip = inet_ntop(event.tcpaddr.family, bytes(event.tcpaddr.laddr))
         remote_ip = inet_ntop(event.tcpaddr.family, bytes(event.tcpaddr.raddr))
 
-    tls_lib = "OpenSSL" if event.flags == 0 else "Other"
+    tls_lib_name = "Other"
+    if event.lib_id != 255:
+        lib = tls_libs[event.lib_id]
+        tls_lib_name = lib.get("verboseName", lib["name"])
 
     print("%-6d %-12s %-10s %-24s %-24s" % (event.pid, 
                                            event.name.decode('ascii'), 
-                                           tls_lib,
+                                           tls_lib_name,
                                            "%s:%d" % (local_ip, event.tcpaddr.lport),
                                            "%s:%d" % (remote_ip, event.tcpaddr.rport)))
+
+    if event.flags & 1:
+        print("^ BLACKLISTED")
 
 b["tls_trace_event"].open_perf_buffer(print_event)
 

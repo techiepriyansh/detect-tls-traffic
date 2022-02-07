@@ -1,6 +1,7 @@
 [
 	{
 		"name": "ssl",
+		"verboseName": "OpenSSL",
 		"functions": [
 			"SSL_do_handshake",
 

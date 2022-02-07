@@ -18,31 +18,40 @@ struct tcpaddr_t {
 	u16 rport;
 };
 
+// contains information about a TLS connection
+struct tlsinfo_t {
+	u8 lib_id;
+	struct tcpaddr_t tcpaddr;
+};
+
 // struct for storing the trace output to be sent to the userspace 
 struct perf_output_t {
 	u32 pid;
 	char name[TASK_COMM_LEN];	
 	struct tcpaddr_t tcpaddr;
-	u8 flags;
-		// flags = 1 if using not using OpenSSL for sending TLS data
+
+	u8 lib_id; // uniquely identifies a TLS library defined inside config.json
+	           // if the library is not present in config.json, then lib_id is 255
+
+	u8 flags; // if LSB is set then just blacklisted the tcp connection corresponding to this struct
 };
 
 // maps if a task identified by its pid has its execution going on inside an SSL IO Function
 BPF_HASH(inside_ssl_io_fn, u32, u8);
 
-// maps a task identified by its pid to the current tcp connection information
-BPF_HASH(pid_tcpaddr_map, u32, struct tcpaddr_t);
+// maps a task identified by its pid to its current TLS connection information
+BPF_HASH(pid_tlsinfo_map, u32, struct tlsinfo_t);
 
 // do we need to filter out TLS connections not using a specific library
-#define SHOULD_BLACKLIST 1
+#define SHOULD_BLACKLIST __PY_SHOULD_BLACKLIST__ 
 
 // a map of tcp connections which should be blacklisted
 BPF_HASH(blacklist, struct tcpaddr_t, u8);
 
 BPF_PERF_OUTPUT(tls_trace_event);
 
-// hook to SSL_read[_ex], SSL_write[_ex], SSL_do_handshake, SSL_peek[_ex], SSL_shutdown
-int hook_to_SSL_IO_fn(struct pt_regs *ctx) {
+// generic internal handler for TLS library function uprobes 
+static inline int tls_lib_fn_enter(struct pt_regs *ctx, u8 lib_id) {
 	u32 pid;
 	pid = bpf_get_current_pid_tgid();
 
@@ -54,16 +63,20 @@ int hook_to_SSL_IO_fn(struct pt_regs *ctx) {
 	u8 _true = 1;
 	inside_ssl_io_fn.update(&pid, &_true);
 	
-	// reset the tcpaddr value
-	struct tcpaddr_t *tcpaddr = pid_tcpaddr_map.lookup(&pid); 
-	if (tcpaddr != NULL)
-		pid_tcpaddr_map.delete(&pid);
+	// reset the tlsinfo value
+	struct tlsinfo_t *tlsinfo = pid_tlsinfo_map.lookup(&pid); 
+	if (tlsinfo != NULL)
+		pid_tlsinfo_map.delete(&pid);
+
+	struct tlsinfo_t new_tls_info = {};
+	new_tls_info.lib_id = lib_id;
+	pid_tlsinfo_map.update(&pid, &new_tls_info);
 
 	return 0;
 }
 
-// hook to SSL_read[_ex], SSL_write[_ex], SSL_do_handshake, SSL_peek[_ex], SSL_shutdown return
-int hookret_to_SSL_IO_fn(struct pt_regs *ctx) {
+// generic internal handler for TLS library function uretprobes
+static inline int tls_lib_fn_exit(struct pt_regs *ctx) {
 	u32 pid;
 	pid = bpf_get_current_pid_tgid();
 
@@ -71,17 +84,18 @@ int hookret_to_SSL_IO_fn(struct pt_regs *ctx) {
 	if (val == NULL)
 		return 1;
 
-	u8 _false = 0;
-	inside_ssl_io_fn.delete(&pid); // has to be done due to a bug in map.update
-	inside_ssl_io_fn.update(&pid, &_false);
+	inside_ssl_io_fn.delete(&pid); 
 
-	struct tcpaddr_t *tcpaddr = pid_tcpaddr_map.lookup(&pid);
-	if (tcpaddr != NULL) {
+	struct tlsinfo_t *tlsinfo = pid_tlsinfo_map.lookup(&pid);
+	if (tlsinfo == NULL)
+		return 1;
+	if (tlsinfo->tcpaddr.family != 0) { // indicates that the value was updated in between enter and exit
 		struct perf_output_t perf_output = {};
 
 		perf_output.pid = pid;
 		bpf_get_current_comm(&perf_output.name, sizeof(perf_output.name));
-		perf_output.tcpaddr = *tcpaddr;
+		perf_output.tcpaddr = tlsinfo->tcpaddr;
+		perf_output.lib_id = tlsinfo->lib_id;
 		perf_output.flags = 0;
 
 		tls_trace_event.perf_submit(ctx, &perf_output, sizeof(perf_output));
@@ -89,6 +103,9 @@ int hookret_to_SSL_IO_fn(struct pt_regs *ctx) {
 
 	return 0;
 }
+
+// to be substituted from inside the python script
+__PY_EXTERNAL_WRAPPERS__
 
 // helper function to determine if the packet is (should be) a TLS packet or not
 // currently just checks if any of the rport or lport is 443
@@ -150,8 +167,8 @@ static inline int hook_to_tcp_kernel_call_internal(struct pt_regs *ctx, struct s
 	pid = bpf_get_current_pid_tgid();
 	
 	u8 *is_inside_ssl_io_fn  = inside_ssl_io_fn.lookup(&pid);
-	if (is_inside_ssl_io_fn == NULL || !(*is_inside_ssl_io_fn)) {
-		// not using the OpenSSL library for TLS
+	if (is_inside_ssl_io_fn == NULL) {
+		// not using the specified libraries for TLS
 		// send this information to userspace
 		// and blacklist if opted
 		struct tcpaddr_t tcpaddr = {};
@@ -169,6 +186,7 @@ static inline int hook_to_tcp_kernel_call_internal(struct pt_regs *ctx, struct s
 			perf_output.pid = pid;
 			bpf_get_current_comm(&perf_output.name, sizeof(perf_output.name));
 			perf_output.tcpaddr = tcpaddr;
+			perf_output.lib_id = 255;
 			perf_output.flags = 1;
 
 			tls_trace_event.perf_submit(ctx, &perf_output, sizeof(perf_output));
@@ -176,15 +194,16 @@ static inline int hook_to_tcp_kernel_call_internal(struct pt_regs *ctx, struct s
 		return 0;
 	}
 
-	struct tcpaddr_t *val = pid_tcpaddr_map.lookup(&pid);
-	if (val != NULL)
-		return 0; // already accounted for the current ssl fn's tcpaddr
+	struct tlsinfo_t *tlsinfo = pid_tlsinfo_map.lookup(&pid);
+	if (tlsinfo == NULL)
+		return 1;
+	if (tlsinfo->tcpaddr.family != 0)
+		return 0; // already accounted for the current ssl fn's tlsinfo
 
 	// if this tcp kernel call is the first one inside the current ssl fn's invocation,
-	// store the tcpaddr information
-	struct tcpaddr_t tcpaddr = {};
-	if (parse_tcpaddr(sk, &tcpaddr)) {
-		pid_tcpaddr_map.update(&pid, &tcpaddr);
+	// store the tlsinfo information
+	if (parse_tcpaddr(sk, &tlsinfo->tcpaddr)) {
+		pid_tlsinfo_map.update(&pid, tlsinfo);
 	}
 
     return 0;
