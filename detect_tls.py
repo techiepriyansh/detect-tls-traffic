@@ -1,51 +1,40 @@
 #!/usr/bin/python3
 
 import sys
-
+import os
 from bcc import BPF
 from socket import inet_ntop, AF_INET, AF_INET6
-from struct import pack
 import ctypes as ct
+import json
 
-libfns = [
-    "SSL_CTX_new", 
-    "SSL_set_fd", 
-    "SSL_do_handshake", 
-    "SSL_get_verify_result", 
-    "SSL_read", 
-    "SSL_read_ex",
-    "SSL_write",
-    "SSL_write_ex",
-    "SSL_peek",
-    "SSL_peek_ex",
-    "SSL_shutdown",
-    "SSL_accept",
-]
+# get the directory of the folder which contains this script
+base_path = os.path.dirname(os.path.realpath(__file__))
 
-device = sys.argv[1]
+# read bpf c source code
+with open(base_path + "/detect_tls.c", "rt") as f:
+    bpf_prog_text = f.read()
 
-b = BPF(src_file="detect_tls.c")
-b.attach_uprobe(name="ssl", sym=libfns[2], fn_name="hook_to_SSL_IO_fn")
-b.attach_uprobe(name="ssl", sym=libfns[4], fn_name="hook_to_SSL_IO_fn")
-b.attach_uprobe(name="ssl", sym=libfns[5], fn_name="hook_to_SSL_IO_fn")
-b.attach_uprobe(name="ssl", sym=libfns[6], fn_name="hook_to_SSL_IO_fn")
-b.attach_uprobe(name="ssl", sym=libfns[7], fn_name="hook_to_SSL_IO_fn")
-b.attach_uprobe(name="ssl", sym=libfns[8], fn_name="hook_to_SSL_IO_fn")
-b.attach_uprobe(name="ssl", sym=libfns[9], fn_name="hook_to_SSL_IO_fn")
-b.attach_uprobe(name="ssl", sym=libfns[10], fn_name="hook_to_SSL_IO_fn")
+# read and parse config.json
+with open(base_path + "/config.json") as f:
+    tls_libs = json.load(f)
 
-b.attach_uretprobe(name="ssl", sym=libfns[2], fn_name="hookret_to_SSL_IO_fn")
-b.attach_uretprobe(name="ssl", sym=libfns[4], fn_name="hookret_to_SSL_IO_fn")
-b.attach_uretprobe(name="ssl", sym=libfns[5], fn_name="hookret_to_SSL_IO_fn")
-b.attach_uretprobe(name="ssl", sym=libfns[6], fn_name="hookret_to_SSL_IO_fn")
-b.attach_uretprobe(name="ssl", sym=libfns[7], fn_name="hookret_to_SSL_IO_fn")
-b.attach_uretprobe(name="ssl", sym=libfns[8], fn_name="hookret_to_SSL_IO_fn")
-b.attach_uretprobe(name="ssl", sym=libfns[9], fn_name="hookret_to_SSL_IO_fn")
-b.attach_uretprobe(name="ssl", sym=libfns[10], fn_name="hookret_to_SSL_IO_fn")
+# compile bpf program and attach probes
+b = BPF(text=bpf_prog_text)
 
-fn = b.load_func("ingress_tls_filter", BPF.XDP)
-b.attach_xdp(device, fn)
+for lib in tls_libs:
+    libname = lib["name"]
+    for libfn in lib["functions"]:
+        b.attach_uprobe(name=libname, sym=libfn, fn_name="hook_to_SSL_IO_fn")
+        b.attach_uretprobe(name=libname, sym=libfn, fn_name="hookret_to_SSL_IO_fn")
 
+# attach XDP Filter if opted
+device = None
+if len(sys.argv) > 1:
+    device = sys.argv[1]
+    fn = b.load_func("ingress_tls_filter", BPF.XDP)
+    b.attach_xdp(device, fn)
+
+# handle print event coming from the bpf program
 def print_event(cpu, data, size):
     TASK_COMM_LEN = 16 # in linux/sched.h
 
@@ -91,4 +80,5 @@ while 1:
     except KeyboardInterrupt:
         exit()
 
-b.remove_xdp(device)
+if device:
+    b.remove_xdp(device)

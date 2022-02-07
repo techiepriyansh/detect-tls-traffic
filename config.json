@@ -1,0 +1,19 @@
+[
+	{
+		"name": "ssl",
+		"functions": [
+			"SSL_do_handshake",
+
+			"SSL_read",
+			"SSL_read_ex",
+			
+			"SSL_peek",
+			"SSL_peek_ex",
+
+			"SSL_write",
+			"SSL_write_ex",
+
+			"SSL_shutdown"
+		]
+	}
+]
