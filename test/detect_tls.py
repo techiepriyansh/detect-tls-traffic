@@ -22,7 +22,7 @@ libfns = [
     "SSL_accept",
 ]
 
-# device = sys.argv[1]
+device = sys.argv[1]
 
 b = BPF(src_file="detect_tls.c")
 b.attach_uprobe(name="ssl", sym=libfns[2], fn_name="hook_to_SSL_IO_fn")
@@ -43,8 +43,8 @@ b.attach_uretprobe(name="ssl", sym=libfns[8], fn_name="hookret_to_SSL_IO_fn")
 b.attach_uretprobe(name="ssl", sym=libfns[9], fn_name="hookret_to_SSL_IO_fn")
 b.attach_uretprobe(name="ssl", sym=libfns[10], fn_name="hookret_to_SSL_IO_fn")
 
-# fn = b.load_func("ingress_tls_filter", BPF.XDP)
-# b.attach_xdp(device, fn)
+fn = b.load_func("ingress_tls_filter", BPF.XDP)
+b.attach_xdp(device, fn)
 
 def print_event(cpu, data, size):
     TASK_COMM_LEN = 16 # in linux/sched.h
@@ -91,4 +91,4 @@ while 1:
     except KeyboardInterrupt:
         exit()
 
-# b.remove_xdp(device)
+b.remove_xdp(device)

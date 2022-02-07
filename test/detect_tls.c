@@ -185,34 +185,79 @@ int kprobe__tcp_cleanup_rbuf(struct pt_regs *ctx, struct sock *sk, int copied)
 }
 
 //XDP filter helper functions
-static inline void handle_tcp(void *data, void *data_end) 
+
+// determines if the TCP data is a TLS packet
+static inline int is_packet_tls(u8 *data, void *data_end)
+{
+	// check TLS record header size
+	if ((void*)&data[5] > data_end)
+		return 0;	
+
+	bpf_trace_printk("%x %x %x\n", data[0], data[1], data[2]);
+	
+	// check TLS record type
+	if (data[0] < 0x14 || data[0] > 0x17)
+		return 0;
+	
+	// check TLS major version type
+	if (data[1] != 0x03)
+		return 0;
+
+	// check TLS minor version type
+	if (data[2] > 0x03)
+		return 0;
+
+	// check length of the data
+	u16 data_len = (data[3] << 8) + data[4];
+	bpf_trace_printk("%d - %d\n", data_len, (int)((u8*)data_end - data));
+	
+	return 1;
+}
+
+static inline int handle_tcp(void *data, void *data_end) 
 {
 	struct tcphdr *tcph = data;
 	if ((void*)&tcph[1] <= data_end) {
 		if (tcph->source == htons(443)) {
-			bpf_trace_printk("    Raw Packet\n");	
+			int tcp_header_len = tcph->doff << 2;
+			if ((void*)tcph + tcp_header_len <= data_end) {
+				u8 *tcpdata = (u8*)(void*)tcph + tcp_header_len;
+				if ((void*)&tcpdata[1] <= data_end) {
+					if (is_packet_tls(tcpdata, data_end)) {
+						bpf_trace_printk("Packet was TLS\n");
+					} else {
+						bpf_trace_printk("Not TLS :(\n");
+					}
+				}
+			}
 		}
 	}
+
+	return XDP_PASS;
 }
 
-static inline void handle_ipv4(void *data, void *data_end) 
+static inline int handle_ipv4(void *data, void *data_end) 
 {
     struct iphdr *iph = data;
     if ((void*)&iph[1] <= data_end) {
 		if (iph->protocol == IPPROTO_TCP) {
-			handle_tcp((void*)&iph[1], data_end);
+			return handle_tcp((void*)&iph[1], data_end);
 		}
 	}
+
+	return XDP_PASS;
 }
 
-static inline void handle_ipv6(void *data, void *data_end) 
+static inline int handle_ipv6(void *data, void *data_end) 
 {
     struct ipv6hdr *ip6h = data;
     if ((void*)&ip6h[1] <= data_end) {
 		if (ip6h->nexthdr == IPPROTO_TCP) {
-			handle_tcp((void*)&ip6h[1], data_end);
+			return handle_tcp((void*)&ip6h[1], data_end);
 		}
 	}
+
+	return XDP_PASS;
 }
 
 // XDP filter functions
@@ -244,9 +289,9 @@ int ingress_tls_filter(struct xdp_md *ctx)
 		}
 
 		if (h_proto == htons(ETH_P_IP)) {
-			handle_ipv4(data + nh_off, data_end);
+			return handle_ipv4(data + nh_off, data_end);
 		} else if (h_proto == ETH_P_IPV6) {
-			handle_ipv6(data + nh_off, data_end);
+			return handle_ipv6(data + nh_off, data_end);
 		}
 	}
 	
