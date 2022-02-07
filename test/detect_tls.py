@@ -22,7 +22,7 @@ libfns = [
     "SSL_accept",
 ]
 
-# device = sys.argv[1]
+device = sys.argv[1]
 
 b = BPF(src_file="detect_tls.c")
 b.attach_uprobe(name="ssl", sym=libfns[2], fn_name="hook_to_SSL_IO_fn")
@@ -43,18 +43,18 @@ b.attach_uretprobe(name="ssl", sym=libfns[8], fn_name="hookret_to_SSL_IO_fn")
 b.attach_uretprobe(name="ssl", sym=libfns[9], fn_name="hookret_to_SSL_IO_fn")
 b.attach_uretprobe(name="ssl", sym=libfns[10], fn_name="hookret_to_SSL_IO_fn")
 
-# fn = b.load_func("ingress_tls_filter", BPF.XDP)
-# b.attach_xdp(device, fn)
+fn = b.load_func("ingress_tls_filter", BPF.XDP)
+b.attach_xdp(device, fn)
 
 def print_event(cpu, data, size):
     TASK_COMM_LEN = 16 # in linux/sched.h
 
     class tcpaddr_t(ct.Structure):
         _fields_ = [ ("family", ct.c_uint16),
-                     ("saddr", ct.c_uint8 * 16),
-                     ("daddr", ct.c_uint8 * 16),
+                     ("laddr", ct.c_uint8 * 16),
+                     ("raddr", ct.c_uint8 * 16),
                      ("lport", ct.c_uint16),
-                     ("dport", ct.c_uint16) ]
+                     ("rport", ct.c_uint16) ]
 
     class perf_output_t(ct.Structure):
         _fields_ = [ ("pid", ct.c_uint32),
@@ -64,31 +64,31 @@ def print_event(cpu, data, size):
 
     event = ct.cast(data, ct.POINTER(perf_output_t)).contents
     
-    source_ip, dest_ip = None, None
+    local_ip, remote_ip = None, None
     if event.tcpaddr.family == AF_INET:
-        source_ip = inet_ntop(event.tcpaddr.family, bytes(event.tcpaddr.saddr[:4]))
-        dest_ip = inet_ntop(event.tcpaddr.family, bytes(event.tcpaddr.daddr[:4]))
+        local_ip = inet_ntop(event.tcpaddr.family, bytes(event.tcpaddr.laddr[:4]))
+        remote_ip = inet_ntop(event.tcpaddr.family, bytes(event.tcpaddr.raddr[:4]))
     else:
         assert event.tcpaddr.family == AF_INET6
-        source_ip = inet_ntop(event.tcpaddr.family, bytes(event.tcpaddr.saddr))
-        dest_ip = inet_ntop(event.tcpaddr.family, bytes(event.tcpaddr.daddr))
+        local_ip = inet_ntop(event.tcpaddr.family, bytes(event.tcpaddr.laddr))
+        remote_ip = inet_ntop(event.tcpaddr.family, bytes(event.tcpaddr.raddr))
 
     tls_lib = "OpenSSL" if event.flags == 0 else "Other"
 
     print("%-6d %-12s %-10s %-24s %-24s" % (event.pid, 
                                            event.name.decode('ascii'), 
                                            tls_lib,
-                                           "%s:%d" % (source_ip, event.tcpaddr.lport),
-                                           "%s:%d" % (dest_ip, event.tcpaddr.dport)))
+                                           "%s:%d" % (local_ip, event.tcpaddr.lport),
+                                           "%s:%d" % (remote_ip, event.tcpaddr.rport)))
 
 b["tls_trace_event"].open_perf_buffer(print_event)
 
 print("Starting to trace...", flush=True)
-print("%-6s %-12s %-10s %-24s %-24s" % ("PID", "COMM", "LIB", "SRC", "DEST"))
+print("%-6s %-12s %-10s %-24s %-24s" % ("PID", "COMM", "LIB", "LOCAL", "REMOTE"))
 while 1:
     try:
         b.perf_buffer_poll()
     except KeyboardInterrupt:
         exit()
 
-# b.remove_xdp(device)
+b.remove_xdp(device)
