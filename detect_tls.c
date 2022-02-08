@@ -170,8 +170,11 @@ static inline int parse_tcpaddr(struct sock *sk, struct tcpaddr_t *tcpaddr)
 	if (family == AF_INET) {
 		bpf_probe_read_kernel(&tcpaddr->laddr, 4, &sk->__sk_common.skc_rcv_saddr);
 		bpf_probe_read_kernel(&tcpaddr->raddr, 4, &sk->__sk_common.skc_daddr);
+
 		tcpaddr->lport = sk->__sk_common.skc_num;
-		
+		if (tcpaddr->lport == 0)
+			return 0;
+
 		rport = sk->__sk_common.skc_dport;
 		tcpaddr->rport = ntohs(rport);
 		
@@ -181,7 +184,10 @@ static inline int parse_tcpaddr(struct sock *sk, struct tcpaddr_t *tcpaddr)
 			&sk->__sk_common.skc_v6_rcv_saddr.in6_u.u6_addr32);
 		bpf_probe_read_kernel(&tcpaddr->raddr, sizeof(tcpaddr->raddr),
 			&sk->__sk_common.skc_v6_daddr.in6_u.u6_addr32);
+		
 		tcpaddr->lport = sk->__sk_common.skc_num;
+		if (tcpaddr->lport == 0)
+			return 0;
 
 		rport = sk->__sk_common.skc_dport;
 		tcpaddr->rport = ntohs(rport);
@@ -362,5 +368,43 @@ int ingress_tls_filter(struct xdp_md *ctx)
 	}
 	
 	return XDP_PASS;
+}
+
+// remove the TCP connection from blacklist when it is closed
+TRACEPOINT_PROBE(sock, inet_sock_set_state)
+{
+	if (!SHOULD_BLACKLIST)
+		return 0;
+
+	if (args->protocol != IPPROTO_TCP)
+		return 0;
+	
+	if (args->newstate != TCP_CLOSE)
+		return 0;
+	
+	struct tcpaddr_t tcpaddr = {};
+	
+	tcpaddr.family = args->family;
+	tcpaddr.lport = args->sport;
+	tcpaddr.rport = args->dport;
+
+	if (args->family == AF_INET) {
+		bpf_probe_read_kernel(&tcpaddr.laddr, 4, &args->saddr);
+		bpf_probe_read_kernel(&tcpaddr.raddr, 4, &args->daddr);
+	} else if (args->family == AF_INET6) {
+		bpf_probe_read_kernel(&tcpaddr.laddr, 16, &args->saddr_v6);
+		bpf_probe_read_kernel(&tcpaddr.raddr, 16, &args->daddr_v6);
+	} else {
+		return 0;
+	}
+
+	if (tcpaddr.lport == 443 || tcpaddr.rport == 443) { // just an optimization under current assumptions
+		u8 *val = blacklist.lookup(&tcpaddr);
+		if (val != NULL) {
+			blacklist.delete(&tcpaddr);
+		}
+	}
+
+	return 0;
 }
 
