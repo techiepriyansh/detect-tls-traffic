@@ -45,6 +45,14 @@ BPF_HASH(pid_tlsinfo_map, u32, struct tlsinfo_t);
 // do we need to filter out TLS connections not using a specific library
 #define SHOULD_BLACKLIST __PY_SHOULD_BLACKLIST__ 
 
+// an array for holding the allowed libraries' lib_ids to be used when opted for blacklisting
+BPF_ARRAY(allowed_libs, u8, 256);
+
+// global variable to determine if the above array was initialized
+BPF_ARRAY(did_initialize_allowed_libs, u8, 1);
+
+// macro to initialize
+
 // a map of tcp connections which should be blacklisted
 BPF_HASH(blacklist, struct tcpaddr_t, u8);
 
@@ -96,7 +104,13 @@ static inline int tls_lib_fn_exit(struct pt_regs *ctx) {
 		bpf_get_current_comm(&perf_output.name, sizeof(perf_output.name));
 		perf_output.tcpaddr = tlsinfo->tcpaddr;
 		perf_output.lib_id = tlsinfo->lib_id;
+
 		perf_output.flags = 0;
+		if (SHOULD_BLACKLIST) {
+			u8 *val = blacklist.lookup(&tlsinfo->tcpaddr);
+			if (val != NULL)
+				perf_output.flags |= 1;
+		}
 
 		tls_trace_event.perf_submit(ctx, &perf_output, sizeof(perf_output));
 	}
@@ -107,9 +121,30 @@ static inline int tls_lib_fn_exit(struct pt_regs *ctx) {
 // to be substituted from inside the python script
 __PY_EXTERNAL_WRAPPERS__
 
+// helper function to initialize the allowed libs sent from inside python
+static inline void initialize_allowed_libs()
+{
+	int idx = 0;
+	u8 *val = did_initialize_allowed_libs.lookup(&idx);
+	if (val != NULL)
+		return;
+	
+	int allowed_libs_len = __PY_ALLOWED_LIBS_LEN__;
+	int allowed_libs_arr[] = { __PY_ALLOWED_LIBS__ };
+
+	u8 _true = 1;
+
+	for (int i = 0; i < allowed_libs_len; i++) {
+		int lib_id = allowed_libs_arr[i];
+		allowed_libs.update(&lib_id, &_true);
+	}
+
+	did_initialize_allowed_libs.update(&idx, &_true);
+}
+
 // helper function to determine if the packet is (should be) a TLS packet or not
 // currently just checks if any of the rport or lport is 443
-int static inline is_tls(struct sock *sk) 
+static inline int is_tls(struct sock *sk) 
 {
     u16 rport = 0, lport = 0, family = sk->__sk_common.skc_family;
 
@@ -157,6 +192,16 @@ static inline int parse_tcpaddr(struct sock *sk, struct tcpaddr_t *tcpaddr)
 	return 0; // could not parse successfully
 }
 
+// helper function to blacklist a TCP connection
+static inline void do_blacklist(struct tcpaddr_t *tcpaddr)
+{
+	u8 *val = blacklist.lookup(tcpaddr);
+	if (val == NULL) {
+		u8 _true = 1;
+		blacklist.update(tcpaddr, &_true);
+	}
+}
+
 // internal function for kprobing tcp kernel calls: tcp_sendmsg and tcp_clean_rbuf
 static inline int hook_to_tcp_kernel_call_internal(struct pt_regs *ctx, struct sock *sk)
 {
@@ -173,13 +218,8 @@ static inline int hook_to_tcp_kernel_call_internal(struct pt_regs *ctx, struct s
 		// and blacklist if opted
 		struct tcpaddr_t tcpaddr = {};
 		if (parse_tcpaddr(sk, &tcpaddr)) {
-			if (SHOULD_BLACKLIST) {
-				u8 *val = blacklist.lookup(&tcpaddr);
-				if (val == NULL) {
-					u8 _true = 1;
-					blacklist.update(&tcpaddr, &_true); 
-				}
-			}
+			if (SHOULD_BLACKLIST)
+				do_blacklist(&tcpaddr);
 
 			struct perf_output_t perf_output = {};
 
@@ -187,7 +227,10 @@ static inline int hook_to_tcp_kernel_call_internal(struct pt_regs *ctx, struct s
 			bpf_get_current_comm(&perf_output.name, sizeof(perf_output.name));
 			perf_output.tcpaddr = tcpaddr;
 			perf_output.lib_id = 255;
-			perf_output.flags = 1;
+			
+			perf_output.flags = 0;
+			if (SHOULD_BLACKLIST)
+				perf_output.flags |= 1;
 
 			tls_trace_event.perf_submit(ctx, &perf_output, sizeof(perf_output));
 		}
@@ -204,6 +247,13 @@ static inline int hook_to_tcp_kernel_call_internal(struct pt_regs *ctx, struct s
 	// store the tlsinfo information
 	if (parse_tcpaddr(sk, &tlsinfo->tcpaddr)) {
 		pid_tlsinfo_map.update(&pid, tlsinfo);
+		
+		if (SHOULD_BLACKLIST) {
+			int lib_id = tlsinfo->lib_id;
+			u8 *is_allowed = allowed_libs.lookup(&lib_id);
+			if (is_allowed == NULL) 
+				do_blacklist(&tlsinfo->tcpaddr);
+		}
 	}
 
     return 0;
