@@ -126,7 +126,7 @@ def trace_and_blacklist(args, base_path):
         try:
             b.perf_buffer_poll()
         except KeyboardInterrupt:
-            exit()
+            break
 
     if device:
         b.remove_xdp(device)
