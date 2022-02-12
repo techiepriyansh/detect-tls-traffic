@@ -9,7 +9,6 @@
 
 struct perf_output_t {
 	u32 pid;
-	char comm[TASK_COMM_LEN];
 	u32 fn_id;
 	u8 perf_event;
 };
@@ -21,7 +20,6 @@ static inline void send_perf_output(struct pt_regs *ctx, u32 fn_id, u8 perf_even
 	struct perf_output_t perf_output = {};
 
 	perf_output.pid = bpf_get_current_pid_tgid();
-	bpf_get_current_comm(&perf_output.comm, sizeof(perf_output.comm));
 	perf_output.fn_id = fn_id;
 	perf_output.perf_event = perf_event;
 
