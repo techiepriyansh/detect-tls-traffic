@@ -9,11 +9,28 @@ import ctypes as ct
 import time
 
 MAX_PROBES = 200
+MAX_STACKS = 64
 
 def trace_tls_libfns(base_path, lib, command):
     # read the bpf c source code
     with open(base_path + "/trace_tls_libfns.c", "rt") as f:
         base_bpf_prog_text = f.read()
+    
+    # insert the array of stacks defintion into the bpf c source code
+    stack_definition_template = f'BPF_STACK(fn_stack_%d, u32, {MAX_PROBES});' 
+
+    array_of_stacks_definition = [f'#define MAX_STACK_DEPTH {MAX_PROBES}']
+    for i in range(MAX_STACKS):
+        array_of_stacks_definition.append(stack_definition_template % i)
+
+    array_of_stacks_definition.append(
+        f'BPF_ARRAY_OF_MAPS(fn_stack_arr, "fn_stack_0", {MAX_STACKS});'
+    )
+
+    base_bpf_prog_text = base_bpf_prog_text.replace(
+        "__PY_ARRAY_OF_STACKS_DEFINITION__",
+        "\n".join(array_of_stacks_definition)
+    )
 
     # augment the lib name provided by user
     if not lib.startswith('lib'):
@@ -50,7 +67,7 @@ def trace_tls_libfns(base_path, lib, command):
     wrapper_enter_fn_template = """
     int hook_to_tls_lib_%s_fn(struct pt_regs *ctx)
     {
-        send_perf_output(ctx, %d, PERF_EVENT_TLS_LIB_FN_ENTER);
+        on_tls_lib_fn_enter_exit(ctx, %d, PERF_EVENT_TLS_LIB_FN_ENTER);
         return 0;
     }
     """
@@ -58,13 +75,21 @@ def trace_tls_libfns(base_path, lib, command):
     wrapper_exit_fn_template = """
     int hookret_to_tls_lib_%s_fn(struct pt_regs *ctx)
     {
-        send_perf_output(ctx, %d, PERF_EVENT_TLS_LIB_FN_EXIT);
+        on_tls_lib_fn_enter_exit(ctx, %d, PERF_EVENT_TLS_LIB_FN_EXIT);
         return 0;
     }
     """
     
     # define a set to hold all the detected library TLS read/write functions
     possible_rw_fns = set()
+
+    # helper function for printing all the detected library functions responsible for TLS read/write
+    def print_detected_fns():
+        print("\nFound these library functions responsible for TLS read/write:")
+        print("=============================================================\n")
+        for possible_rw_fn in possible_rw_fns:
+            print(libfns_to_trace[possible_rw_fn])
+        print("\n")
 
     # there may be thousands of symbols in a library, but we cannot attach these many u[ret]probes all at once
     # so we break the functions in chunks of size MAX_PROBES and scan each chunk individually
@@ -79,14 +104,24 @@ def trace_tls_libfns(base_path, lib, command):
         bpf_prog_text = base_bpf_prog_text.replace("__PY_EXTERNAL_WRAPPERS__", '\n'.join(wrapper_fns))
 
         # compile the bpf c source code
-        print("compiling bpf program...", end="", flush=True)
+        print("  - compiling bpf program...", end="", flush=True)
         b = BPF(text=bpf_prog_text)
         print("done!")
+
+        # helper function to assign the declared stacks to the array of stacks
+        def assign_stacks_to_array_of_stacks():
+            array_of_stacks = b["fn_stack_arr"]
+            for i in range(MAX_STACKS):
+                array_of_stacks[ct.c_int(i)] = ct.c_int(b[f"fn_stack_{i}"].map_fd)
+
+            b["next_idx"][ct.c_int(0)] = ct.c_int(0)
+
+        assign_stacks_to_array_of_stacks()
         
         # helper function to attach uprobes and uretprobes corresponding to all the library functions 
         # being traced in this scan iteration
         def attach_uprobes_uretprobes():
-            print("attaching uprobes and uretprobes...", end="", flush=True)
+            print("  - attaching uprobes and uretprobes...", end="", flush=True)
             for libfn in libfns_to_trace[base_index:base_index+MAX_PROBES]:
                 try:
                     b.attach_uprobe(name=libpath, sym=libfn, fn_name="hook_to_tls_lib_%s_fn"%libfn)
@@ -98,7 +133,7 @@ def trace_tls_libfns(base_path, lib, command):
         
         # helper function to detach uprobes and uretprobes attached through the attach_uprobe_uretprobes function
         def detach_uprobes_uretprobes():
-            print("detaching uprobes and uretprobes...", end="", flush=True)
+            print("  - detaching uprobes and uretprobes...", end="", flush=True)
             for libfn in libfns_to_trace[base_index:base_index+MAX_PROBES]:
                 try:
                     b.detach_uretprobe(name=libpath, sym=libfn)
@@ -110,40 +145,16 @@ def trace_tls_libfns(base_path, lib, command):
         
         # attach uprobes and uretprobes
         attach_uprobes_uretprobes()
-       
-        # map holding the function stacks corresponding of processes corresponding to their PIDs
-        pid_fn_stack_dict = {}
 
         # receive information from bpf program
         def trace_event(cpu, data, size):
             class perf_output_t(ct.Structure):
-                _fields_ = [ ("pid", ct.c_uint32),
-                             ("fn_id", ct.c_uint32),
-                             ("perf_event", ct.c_uint8) ]
+                _fields_ = [ ("fn_id", ct.c_uint32), ]
 
             event = ct.cast(data, ct.POINTER(perf_output_t)).contents
+            possible_rw_fns.add(event.fn_id)
+            print(f"  - found: {libfns_to_trace[event.fn_id]}")
             
-            fn_stack = pid_fn_stack_dict.get(event.pid, [])
-
-            if event.perf_event == 1:
-                # PERF_EVENT_TLS_LIB_FN_ENTER
-                fn_stack.append(event.fn_id)
-            elif event.perf_event == 2:
-                # PERF_EVENT_TLS_LIB_FN_EXIT
-                idx = fn_stack[::-1].index(event.fn_id)
-                if idx == -1:
-                    fn_stack = []
-                else:
-                    del fn_stack[len(fn_stack)-1-idx:]
-            elif event.perf_event == 3 or event.perf_event == 4:
-                # PERF_EVENT_TCP_SEND or PERF_EVENT_TCP_RECV
-                if len(fn_stack) != 0:
-                    if not fn_stack[-1] in possible_rw_fns:
-                        print(f"found: {libfns_to_trace[fn_stack[-1]]}")
-                    possible_rw_fns.add(fn_stack[-1])
-
-            pid_fn_stack_dict[event.pid] = fn_stack
-                    
         b["tls_libfn_trace_event"].open_perf_buffer(trace_event)
         
         # helper function to run the command to be traced
@@ -158,8 +169,10 @@ def trace_tls_libfns(base_path, lib, command):
                 try:
                     b.perf_buffer_poll(1000)
                 except KeyboardInterrupt:
-                    print("attmepting to exit gracefully")
+                    print("\nattmepting to exit gracefully")
                     detach_uprobes_uretprobes()
+                    b.cleanup()
+                    print_detected_fns()
                     sys.exit()
 
         # run the command to be traced and bpf event retriever as two separate processes
@@ -169,7 +182,7 @@ def trace_tls_libfns(base_path, lib, command):
         p.start()
         poll_perf_buffer(q)
         p.join()
-
+        
         # finally detach the uprobes and uretprobes attached earlier and cleanup
         detach_uprobes_uretprobes()
         b.cleanup()
@@ -179,9 +192,8 @@ def trace_tls_libfns(base_path, lib, command):
         print(f"scanning {MAX_PROBES} library functions starting from index {j}")
         scan_iteration(j)
 
-    # print the possible library functions responsible for TLS read/write
-    for possible_rw_fn in possible_rw_fns:
-        print(libfns_to_trace[possible_rw_fn])
+    # print all the detected fns responsible for TLS read/write
+    print_detected_fns()
 
     
 if __name__ == "__main__":
