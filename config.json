@@ -16,5 +16,21 @@
 
 			"SSL_shutdown"
 		]
+	},
+	{
+		"name": "gnutls",
+		"verboseName": "GnuTLS",
+		"functions": [
+			"gnutls_alert_send",
+			
+			"gnutls_bye",
+
+			"gnutls_handshake",
+
+			"gnutls_record_send",
+			"gnutls_record_send2",
+
+			"gnutls_record_recv"
+		]
 	}
 ]
