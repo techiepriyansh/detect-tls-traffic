@@ -36,8 +36,11 @@ struct perf_output_t {
 	u8 flags; // if LSB is set then just blacklisted the tcp connection corresponding to this struct
 };
 
-// maps if a task identified by its pid has its execution going on inside an SSL IO Function
-BPF_HASH(inside_ssl_io_fn, u32, u8);
+// contains the traced TLS functions' depth 
+// i.e. how many TLS functions being traced are currently in the function call stack
+// used to determine if a task identified by its pid has its execution going on inside TLS IO functions
+// implicitly assumes max call stack depth (of traced TLS fns) of 255
+BPF_HASH(tls_fns_call_stack_depth, u32, u8);
 
 // maps a task identified by its pid to its current TLS connection information
 BPF_HASH(pid_tlsinfo_map, u32, struct tlsinfo_t);
@@ -48,9 +51,6 @@ BPF_HASH(pid_tlsinfo_map, u32, struct tlsinfo_t);
 // an array for holding the allowed libraries' lib_ids to be used when opted for blacklisting
 BPF_ARRAY(allowed_libs, u8, 256);
 
-// global variable to determine if the above array was initialized
-BPF_ARRAY(did_initialize_allowed_libs, u8, 1);
-
 // a map of tcp connections which should be blacklisted
 BPF_HASH(blacklist, struct tcpaddr_t, u8);
 
@@ -60,14 +60,15 @@ BPF_PERF_OUTPUT(tls_trace_event);
 static inline int tls_lib_fn_enter(struct pt_regs *ctx, u8 lib_id) {
 	u32 pid;
 	pid = bpf_get_current_pid_tgid();
-
-	// due to a bug in the map.update function for kernel versions before 4.8
-	u8 *val = inside_ssl_io_fn.lookup(&pid);
-	if (val != NULL) 
-		inside_ssl_io_fn.delete(&pid);
-
-	u8 _true = 1;
-	inside_ssl_io_fn.update(&pid, &_true);
+	
+	u8 *val = tls_fns_call_stack_depth.lookup(&pid);
+	if (val == NULL) {
+		u8 _zero = 0;
+		tls_fns_call_stack_depth.update(&pid, &_zero);
+	}
+	
+	// increment the traced TLS fns' function call stack depth
+	tls_fns_call_stack_depth.increment(pid);
 	
 	// reset the tlsinfo value
 	struct tlsinfo_t *tlsinfo = pid_tlsinfo_map.lookup(&pid); 
@@ -86,11 +87,12 @@ static inline int tls_lib_fn_exit(struct pt_regs *ctx) {
 	u32 pid;
 	pid = bpf_get_current_pid_tgid();
 
-	u8 *val = inside_ssl_io_fn.lookup(&pid);
-	if (val == NULL)
+	u8 *val = tls_fns_call_stack_depth.lookup(&pid);
+	if (val == NULL || !(*val))
 		return 1;
 
-	inside_ssl_io_fn.delete(&pid); 
+	u8 new_depth = *val - 1;
+	tls_fns_call_stack_depth.update(&pid, &new_depth); 
 
 	struct tlsinfo_t *tlsinfo = pid_tlsinfo_map.lookup(&pid);
 	if (tlsinfo == NULL)
@@ -118,27 +120,6 @@ static inline int tls_lib_fn_exit(struct pt_regs *ctx) {
 
 // to be substituted from inside the python script
 __PY_EXTERNAL_WRAPPERS__
-
-// helper function to initialize the allowed libs sent from inside python
-static inline void initialize_allowed_libs()
-{
-	int idx = 0;
-	u8 *val = did_initialize_allowed_libs.lookup(&idx);
-	if (val != NULL)
-		return;
-	
-	int allowed_libs_len = __PY_ALLOWED_LIBS_LEN__;
-	int allowed_libs_arr[] = { __PY_ALLOWED_LIBS__ };
-
-	u8 _true = 1;
-
-	for (int i = 0; i < allowed_libs_len; i++) {
-		int lib_id = allowed_libs_arr[i];
-		allowed_libs.update(&lib_id, &_true);
-	}
-
-	did_initialize_allowed_libs.update(&idx, &_true);
-}
 
 // helper function to determine if the packet is (should be) a TLS packet or not
 // currently just checks if any of the rport or lport is 443
@@ -215,8 +196,8 @@ static inline int hook_to_tcp_kernel_call_internal(struct pt_regs *ctx, struct s
 	u32 pid;
 	pid = bpf_get_current_pid_tgid();
 	
-	u8 *is_inside_ssl_io_fn  = inside_ssl_io_fn.lookup(&pid);
-	if (is_inside_ssl_io_fn == NULL) {
+	u8 *depth_ptr = tls_fns_call_stack_depth.lookup(&pid);
+	if (depth_ptr == NULL || !(*depth_ptr)) { // if depth non existent or zero
 		// not using the specified libraries for TLS
 		// send this information to userspace
 		// and blacklist if opted
@@ -245,9 +226,9 @@ static inline int hook_to_tcp_kernel_call_internal(struct pt_regs *ctx, struct s
 	if (tlsinfo == NULL)
 		return 1;
 	if (tlsinfo->tcpaddr.family != 0)
-		return 0; // already accounted for the current ssl fn's tlsinfo
+		return 0; // already accounted for the current TLS fn's tlsinfo
 
-	// if this tcp kernel call is the first one inside the current ssl fn's invocation,
+	// if this tcp kernel call is the first one inside the current TLS fn's invocation,
 	// store the tlsinfo information
 	if (parse_tcpaddr(sk, &tlsinfo->tcpaddr)) {
 		pid_tlsinfo_map.update(&pid, tlsinfo);
@@ -255,9 +236,8 @@ static inline int hook_to_tcp_kernel_call_internal(struct pt_regs *ctx, struct s
 		if (SHOULD_BLACKLIST) {
 			int lib_id = tlsinfo->lib_id;
 
-			initialize_allowed_libs();
 			u8 *is_allowed = allowed_libs.lookup(&lib_id);
-			if (is_allowed == NULL) 
+			if (is_allowed == NULL || !(*is_allowed)) 
 				do_blacklist(&tlsinfo->tcpaddr);
 		}
 	}

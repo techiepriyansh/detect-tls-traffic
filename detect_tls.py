@@ -43,23 +43,21 @@ def trace_and_blacklist(args, base_path):
     should_blacklist = "1" if args.subcommand == "blacklist" else "0"
     bpf_prog_text = bpf_prog_text.replace("__PY_SHOULD_BLACKLIST__", should_blacklist)
 
-    # substitute allowed libs inside the bpf c source code
-    allowed_libs = [str(x) for x in list(range(len(tls_libs)))]
-    allowed_libs_len = str(len(tls_libs))
+    # compile bpf program
+    b = BPF(text=bpf_prog_text)
 
+    # populate allowed_libs map allowed libs inside the bpf c source code
+    allowed_libs = [str(x) for x in list(range(len(tls_libs)))]
     if "allowed_libs" in args and args.allowed_libs:
         tls_lib_name_to_id = {}
         for i, lib in enumerate(tls_libs):
-            tls_lib_name_to_id[lib["name"]] = str(i) 
+            tls_lib_name_to_id[lib["name"]] = i 
             
         allowed_libs = [tls_lib_name_to_id[libname] for libname in args.allowed_libs]
-        allowed_libs_len = str(len(args.allowed_libs))
     
-    bpf_prog_text = bpf_prog_text.replace("__PY_ALLOWED_LIBS_LEN__", allowed_libs_len)
-    bpf_prog_text = bpf_prog_text.replace("__PY_ALLOWED_LIBS__", ", ".join(allowed_libs))
-    
-    # compile bpf program
-    b = BPF(text=bpf_prog_text)
+    bpf_allowed_libs_map = b["allowed_libs"]
+    for allowed_lib_id in allowed_libs:
+        bpf_allowed_libs_map[ct.c_int(allowed_lib_id)] = ct.c_uint8(1)
 
     # attach uprobes and uretprobes
     for lib in tls_libs:
@@ -127,9 +125,11 @@ def trace_and_blacklist(args, base_path):
             b.perf_buffer_poll()
         except KeyboardInterrupt:
             break
-
+    
     if device:
         b.remove_xdp(device)
+
+    b.cleanup()
 
 
 if __name__ == "__main__":
