@@ -2,6 +2,7 @@
 
 import os
 import sys
+import argparse
 import subprocess
 from multiprocessing import Process, Queue
 from bcc import BPF
@@ -80,8 +81,8 @@ def trace_tls_libfns(base_path, lib, command):
     }
     """
     
-    # define a set to hold all the detected library TLS read/write functions
-    possible_rw_fns = set()
+    # define a list to hold all the detected library TLS read/write functions
+    possible_rw_fns = []
 
     # helper function for printing all the detected library functions responsible for TLS read/write
     def print_detected_fns():
@@ -152,7 +153,7 @@ def trace_tls_libfns(base_path, lib, command):
                 _fields_ = [ ("fn_id", ct.c_uint32), ]
 
             event = ct.cast(data, ct.POINTER(perf_output_t)).contents
-            possible_rw_fns.add(event.fn_id)
+            possible_rw_fns.append(event.fn_id)
             print(f"  - found: {libfns_to_trace[event.fn_id]}")
             
         b["tls_libfn_trace_event"].open_perf_buffer(trace_event)
@@ -197,7 +198,22 @@ def trace_tls_libfns(base_path, lib, command):
 
     
 if __name__ == "__main__":
-    lib = sys.argv[1]
-    command = " ".join(sys.argv[2:])
+    examples = r"""example:
+  ./trace_tls_libfns.py       \  # Detects the libssl library functions
+      -l ssl                  \    responsible for TLS read/write during 
+      -c curl https://ebpf.io      the execution of the program
+                                   curl https://ebpf.io
+    """
+
+    parser = argparse.ArgumentParser(
+        description="Detect the functions of a TLS library responsible for TLS read/write(s) of the given program",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=examples)
+
+    parser.add_argument('-l', metavar='lib', required=True, help='name/path of the library to trace functions of')
+    parser.add_argument('-c', metavar=('command', 'arg'), nargs='+', required=True, help='program to be traced') 
+
+    args = parser.parse_args()
+
     base_path = os.path.dirname(os.path.realpath(__file__))
-    trace_tls_libfns(base_path, lib, command)
+    trace_tls_libfns(base_path, args.l, " ".join(args.c))
