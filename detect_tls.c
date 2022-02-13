@@ -51,8 +51,6 @@ BPF_ARRAY(allowed_libs, u8, 256);
 // global variable to determine if the above array was initialized
 BPF_ARRAY(did_initialize_allowed_libs, u8, 1);
 
-// macro to initialize
-
 // a map of tcp connections which should be blacklisted
 BPF_HASH(blacklist, struct tcpaddr_t, u8);
 
@@ -256,6 +254,8 @@ static inline int hook_to_tcp_kernel_call_internal(struct pt_regs *ctx, struct s
 		
 		if (SHOULD_BLACKLIST) {
 			int lib_id = tlsinfo->lib_id;
+
+			initialize_allowed_libs();
 			u8 *is_allowed = allowed_libs.lookup(&lib_id);
 			if (is_allowed == NULL) 
 				do_blacklist(&tlsinfo->tcpaddr);
