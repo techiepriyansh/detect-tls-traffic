@@ -66,19 +66,22 @@ static inline int tls_lib_fn_enter(struct pt_regs *ctx, u8 lib_id) {
 		u8 _zero = 0;
 		tls_fns_call_stack_depth.update(&pid, &_zero);
 	}
+
+	if (val == NULL || !(*val)) { // if the value doesn't exist or is zero
+		// this is the first fn call in the traced TLS fns call stack
+		// so, reset the tlsinfo value
+		struct tlsinfo_t *tlsinfo = pid_tlsinfo_map.lookup(&pid); 
+		if (tlsinfo != NULL)
+			pid_tlsinfo_map.delete(&pid);
+
+		struct tlsinfo_t new_tls_info = {};
+		new_tls_info.lib_id = lib_id;
+		pid_tlsinfo_map.update(&pid, &new_tls_info);
+	}
 	
 	// increment the traced TLS fns' function call stack depth
 	tls_fns_call_stack_depth.increment(pid);
 	
-	// reset the tlsinfo value
-	struct tlsinfo_t *tlsinfo = pid_tlsinfo_map.lookup(&pid); 
-	if (tlsinfo != NULL)
-		pid_tlsinfo_map.delete(&pid);
-
-	struct tlsinfo_t new_tls_info = {};
-	new_tls_info.lib_id = lib_id;
-	pid_tlsinfo_map.update(&pid, &new_tls_info);
-
 	return 0;
 }
 
