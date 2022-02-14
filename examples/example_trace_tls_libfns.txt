@@ -1,0 +1,46 @@
+$ sudo ./trace_tls_libfns.py -l gnutls -c gcurl
+using the library at: /lib/x86_64-linux-gnu/libgnutls.so.30
+scanning 200 library functions starting from index 0
+  - compiling bpf program...done!
+  - attaching uprobes and uretprobes...done!
+  - found: gnutls_alert_send
+  - found: gnutls_bye
+  - detaching uprobes and uretprobes...done!
+scanning 200 library functions starting from index 200
+  - compiling bpf program...done!
+  - attaching uprobes and uretprobes...done!
+  - found: gnutls_handshake
+  - detaching uprobes and uretprobes...done!
+scanning 200 library functions starting from index 400
+  - compiling bpf program...done!
+  - attaching uprobes and uretprobes...done!
+  - detaching uprobes and uretprobes...done!
+scanning 200 library functions starting from index 600
+  - compiling bpf program...done!
+  - attaching uprobes and uretprobes...done!
+  - found: gnutls_record_send2
+  - found: gnutls_record_recv
+  - detaching uprobes and uretprobes...done!
+scanning 200 library functions starting from index 800
+  - compiling bpf program...done!
+  - attaching uprobes and uretprobes...done!
+  - detaching uprobes and uretprobes...done!
+scanning 200 library functions starting from index 1000
+  - compiling bpf program...done!
+  - attaching uprobes and uretprobes...done!
+  - detaching uprobes and uretprobes...done!
+scanning 200 library functions starting from index 1200
+  - compiling bpf program...done!
+  - attaching uprobes and uretprobes...done!
+  - detaching uprobes and uretprobes...done!
+
+Found these library functions responsible for TLS read/write:
+=============================================================
+
+gnutls_alert_send
+gnutls_bye
+gnutls_handshake
+gnutls_record_send2
+gnutls_record_recv
+
+

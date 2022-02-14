@@ -1,0 +1,15 @@
+sudo ./detect_tls.py blacklist --if_name eno1 --allowed_libs gnutls
+Starting to trace...
+PID    COMM         LIB        LOCAL                    REMOTE                  
+8857   curl         OpenSSL    192.168.1.210:38912      185.199.108.153:443     
+^ BLACKLISTED
+8875   gcurl        GnuTLS     192.168.1.210:45288      104.22.26.77:443        
+8875   gcurl        GnuTLS     192.168.1.210:45288      104.22.26.77:443        
+8875   gcurl        GnuTLS     192.168.1.210:45288      104.22.26.77:443        
+8875   gcurl        GnuTLS     192.168.1.210:45288      104.22.26.77:443        
+8875   gcurl        GnuTLS     192.168.1.210:45288      104.22.26.77:443        
+8875   gcurl        GnuTLS     192.168.1.210:45288      104.22.26.77:443        
+1007   snapd        Other      192.168.1.210:46114      91.189.92.39:443        
+^ BLACKLISTED
+1007   snapd        Other      192.168.1.210:46114      91.189.92.39:443        
+^ BLACKLISTED
