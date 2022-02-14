@@ -50,3 +50,6 @@ Detect processes communicating via the TLS protocol and the libraries used for p
 	$ sudo ./trace_tls_libfns.py -l [lib-name] -c command [args...]
 	```
   Examples: [examples/example_trace_tls_libfns_ssl.txt](examples/example_trace_tls_libfns_ssl.txt), [examples/example_trace_tls_libfns_gnutls.txt](examples/example_trace_tls_libfns_gnutls.txt)
+
+## Working
+To learn about the working and design of the tool, please refer to the [developer notes](docs/developer_notes.md).
