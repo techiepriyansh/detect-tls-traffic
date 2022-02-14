@@ -1,0 +1,30 @@
+$ sudo ./trace_tls_libfns.py -l ssl -c curl https://ebpf.io
+using the library at: /lib/x86_64-linux-gnu/libssl.so.1.1
+scanning 200 library functions starting from index 0
+  - compiling bpf program...done!
+  - attaching uprobes and uretprobes...done!
+  - found: SSL_connect
+  - detaching uprobes and uretprobes...done!
+scanning 200 library functions starting from index 200
+  - compiling bpf program...done!
+  - attaching uprobes and uretprobes...done!
+  - found: SSL_do_handshake
+  - found: SSL_read
+  - detaching uprobes and uretprobes...done!
+scanning 200 library functions starting from index 400
+  - compiling bpf program...done!
+  - attaching uprobes and uretprobes...done!
+  - found: SSL_write
+  - found: SSL_shutdown
+  - detaching uprobes and uretprobes...done!
+
+Found these library functions responsible for TLS read/write:
+=============================================================
+
+SSL_connect
+SSL_do_handshake
+SSL_read
+SSL_write
+SSL_shutdown
+
+
