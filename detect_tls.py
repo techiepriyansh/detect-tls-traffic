@@ -47,7 +47,7 @@ def trace_and_blacklist(args, base_path):
     b = BPF(text=bpf_prog_text)
 
     # populate allowed_libs map allowed libs inside the bpf c source code
-    allowed_libs = [str(x) for x in list(range(len(tls_libs)))]
+    allowed_libs = list(range(len(tls_libs)))
     if "allowed_libs" in args and args.allowed_libs:
         tls_lib_name_to_id = {}
         for i, lib in enumerate(tls_libs):
